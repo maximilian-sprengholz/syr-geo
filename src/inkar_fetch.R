@@ -96,11 +96,6 @@ for (geo in geos) {
     namecol <- paste0(tolower(geo), "_name")
     df <- df_ars %>% distinct(!!sym(arscol), !!sym(namecol))
     df[paste0(arscol, "_ref")] <- year # set ars ref (INKAR harmonized to most recent year)
-    # GEM id has a short and long form, INKAR uses the short one
-    if (geo == "GEM") {
-      df$gem_ars_long <- df$gem_ars
-      df <- df %>% mutate(gem_ars = paste0(substr(gem_ars,1,5), substr(gem_ars,10,12)))
-    }
     # get data (list of dfs is returned)
     df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, "FetchStatus"] <- unlist(pbapply(
       df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, ],
@@ -129,11 +124,7 @@ for (geo in geos) {
         }, 
       arscol
       ))
-    # set geo reference year (important for merging!); save dataset
-    if (geo == "GEM") {
-      df$gem_ars <- df$gem_ars_long
-      df <- df %>% select(!c(gem_ars_long))
-    }
+    # save dataset
     write_delim(df, paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), delim = ";")
     }
   }

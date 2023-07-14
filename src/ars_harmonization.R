@@ -95,11 +95,12 @@ process_gv <- function(year) {
   gv <- merge(gv, kre, by="kre", all.x = TRUE, all.y = FALSE)
   gv <- merge(gv, gvb, by="gvb", all.x = TRUE, all.y = FALSE)
   gv <- gv %>% select(-c(satzart)) %>% 
+    mutate(gem_ars = paste0(substr(gem,1,5), substr(gem,10,12))) %>% # AGS, is used in all off. data
     select(
-      gem, name, area, pop, pop_m, pop_w, bl, bl_name, rbz, rbz_name, kre, kre_name, gvb, 
+      gem, gem_ars, name, area, pop, pop_m, pop_w, bl, bl_name, rbz, rbz_name, kre, kre_name, gvb, 
       gvb_name
       ) %>%
-    rename(gem_ars = gem) %>%
+    rename(gem_ars_full = gem) %>% # full digits (included gvb ids)
     rename(gem_name = name) %>%
     rename(rbz_ars = rbz) %>%
     rename(bl_ars = bl) %>%
@@ -111,75 +112,9 @@ years <- 2019:2022
 dfs_gv <- lapply(years, process_gv)
 names(dfs_gv) <- paste0("gv", years)
 
-### provide correspondence from base year to target year 2022
-# gemeinden changed, so did the ars -> allow merge of data from different years
-process_gvchange <- function(year) {
-  # read and name
-  fpath <- paste0(data, "/external/raw/Destatis/GV/3112", year, "_Aenderungen_GV.xlsx")
-  gv <- read_excel(fpath, sheet = 2, skip = 7, col_names = FALSE)
-  gv <- gv[, c(2, 3, 9)]
-  colnames(gv) <- c("lvl", paste0("ars_", year-1), paste0("ars_", year))
-  # split aggregate levels and merge to gemeinde level
-  gv <- gv %>% filter(lvl == "Gemeinde") %>% select(-c(lvl))
-}
-
-df_ars <- dfs_gv$gv2019 %>% select(gem_ars)
-colnames(df_ars) <- c("ars_2019")
-for (year in 2020:2022) {
-  df_ars <- merge(df_ars, process_gvchange(year), by=paste0("ars_", year-1), all.x = TRUE)
-  df_ars <- df_ars %>% mutate(
-    !!sym(paste0("ars_", year)) := case_when(
-      is.na(!!sym(paste0("ars_", year))) ~ !!sym(paste0("ars_", year-1)),
-      .default = !!sym(paste0("ars_", year)) 
-      )
-    )
-}
-
-df_ars <- df_ars[,c(sort(colnames(df_ars)))]
-colnames(df_ars) <- paste0("gem_", colnames(df_ars))
-df_ars <- df_ars %>%
-  mutate(bl_ars_2022 = substr(gem_ars_2022,1,2)) %>%
-  mutate(rbz_ars_2022 = substr(gem_ars_2022,1,3)) %>%
-  mutate(
-    rbz_ars_2022 = case_when(
-      rbz_ars_2022 %in% c("031", "032", "033", "034") ~ "030",
-      rbz_ars_2022 %in% c("071", "072", "073") ~ "070",
-      rbz_ars_2022 %in% c("145", "146", "147") ~ "140",
-      .default = rbz_ars_2022
-    )
-  ) %>%
-  mutate(kre_ars_2022 = substr(gem_ars_2022,1,5)) %>%
-  mutate(gvb_ars_2022 = substr(gem_ars_2022,1,9))
-
-# merge to gv
-merge_2022 <- function(df_gv, df_ars) {
-  year <- df_gv$year[1] # constant
-  if (year < 2022) {
-    df_gv <- merge(
-      df_gv, df_ars %>% select(matches(paste0(c(year,"2022"), "$", collapse="|"))), 
-      by.x="gem_ars", by.y=paste0("gem_ars_", year), all.x = TRUE, all.y = FALSE
-    )
-  }
-  return(df_gv)
-}
-dfs_gv <- lapply(dfs_gv, merge_2022, df_ars)
-
-### merge plz (info from 31.12.2021, accessed Feb 28, 2023; last updated Feb 2022)
-# https://downloads.suche-postleitzahl.org/v2/public/zuordnung_plz_ort.csv
-df_ags_plz <- read_csv(paste0(data, "/external/raw/OSM/zuordnung_plz_ort.csv"))
-dfs_gv <- lapply(dfs_gv, function(df_gv, df_ags_plz) {
-    # create ags for merging (=ars without gemeindevarband code in between)
-    if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars_2022 = gem_ars)
-    df_gv <- df_gv %>% mutate(ags = paste0(substr(gem_ars_2022,1,5), substr(gem_ars_2022,10,12)))
-    # merge
-    df_gv <- merge(df_gv, df_ags_plz %>% select(ags, plz), by="ags", all.x = TRUE, all.y = FALSE)
-    # rename again
-    if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars = gem_ars_2022)
-    # drop ags
-    df_gv <- df_gv %>% select(-c(ags))
-    },
-    df_ags_plz
-  )
+# crosswalks are necessary between years
+# crosswalks until 2020 are provided in the `ags` package
+# manual extension: crosswalk.R
 
 # export, but DROP if pop 0 prior
 dfs_gv <- lapply(dfs_gv, function(df_gv) {

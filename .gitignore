@@ -1,0 +1,10 @@
+# exclude data from source control by default
+.env
+/env
+/data/**
+!/data/**/
+!/data/**/.gitkeep
+*.synctex.gz
+.DS_Store
+/.vscode/**
+

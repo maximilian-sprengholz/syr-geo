@@ -116,9 +116,9 @@ names(dfs_gv) <- paste0("gv", years)
 # crosswalks until 2020 are provided in the `ags` package
 # manual extension: crosswalk.R
 
-# export, but DROP if pop 0 prior
+# export
 dfs_gv <- lapply(dfs_gv, function(df_gv) {
   year <- df_gv$year[1]
-  df_gv <- df_gv %>% filter(pop > 0)
+  # df_gv <- df_gv %>% filter(pop > 0) # some data unavailable for popless municipalities; keep
   write_csv(df_gv, paste0(data, "/external/processed/ars/ars", year, ".csv"))
   })

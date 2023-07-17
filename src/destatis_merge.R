@@ -168,6 +168,40 @@ cols <- colnames(df)
 firstcols <- c("kre_ars", "kre_name", "kre_ars_ref", "year")
 df <- df %>% select(all_of(c(firstcols, cols[!cols %in% firstcols])))
 
+### xwalk again for 2020 -> 2022
+
+# generic function
+xwalk22 <- function(df, lvl, arscol, arsref = 2020, yearcol = NA, weight = "pop", variables) {
+  # read correspondence table
+  df_xwalk <- read_delim(
+    paste0(data, "/external/processed/ars/xwalk_", tolower(lvl), "_", arsref, "_2022.csv"),
+    delim = ";"
+    )
+  # merge to passed df
+  df <- merge(df, df_xwalk, by.x = arscol, by.y = paste0(lvl, "_ars_", arsref), all.x = TRUE)
+  # grouping
+  arsnew = paste0(lvl, "_ars_2022")
+  if (!is.na(yearcol)) groupcols <- c(arsnew, yearcol) else groupcols <- c(arsnew)
+  # weight data
+  df <- df %>% 
+    mutate_at(variables, ~ round(.x * .data[[paste0(weight, "_w")]])) %>%
+    group_by_at(groupcols) %>%
+    summarize(across(variables, ~ sum(.x, na.rm = TRUE))) %>%
+    rename(!!sym(arscol) := arsnew) %>%
+    mutate(!!sym(paste0(lvl, "_ars_ref")) := 2022) %>%
+    select(!!sym(arscol), !!sym(paste0(lvl, "_ars_ref")), !!sym(yearcol), sort(colnames(.)))
+}
+
+# xwalk
+df <- xwalk22(
+  df = df, 
+  lvl = "kre", 
+  arscol = "kre_ars",
+  yearcol = "year", 
+  weight = "pop", 
+  variables = colnames(df)[str_detect(colnames(df), "^auslaender_\\S*")]
+  )
+
 # save
 write_delim(df, paste0(data, "/external/processed/Destatis/kre.csv"), delim = ";")
 

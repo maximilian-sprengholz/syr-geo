@@ -119,6 +119,8 @@ names(dfs_gv) <- paste0("gv", years)
 # export
 dfs_gv <- lapply(dfs_gv, function(df_gv) {
   year <- df_gv$year[1]
-  # df_gv <- df_gv %>% filter(pop > 0) # some data unavailable for popless municipalities; keep
+  # we keep the entities without pop to allow for area based aggregation,
+  # but we drop 3 GEM which have no KRE and are missing in most official data (INKAR, Shapefiles)
+  df_gv <- df_gv %>% filter(!gem_ars_full %in% c("070009999999", "100429999999", "130009999999"))
   write_csv(df_gv, paste0(data, "/external/processed/ars/ars", year, ".csv"))
   })

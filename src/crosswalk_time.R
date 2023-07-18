@@ -1,7 +1,6 @@
 #
 # This file performs geo crosswalks:
 # - over time for the same units
-# - between different geo units for the same time
 #
 
 ### config (relative to working dir syr-geo!)
@@ -16,23 +15,12 @@ library(readr)
 library(stringr)
 library(tibble)
 library(tidyr)
-library(terra)
-library(sf)
-sf_use_s2(FALSE)
-library(units)
 
 # CRAN
 if (!require(pbapply)) install.packages("pbapply")
 library(pbapply)
-if (!require(tidyterra)) install.packages("tidyterra")
-library(tidyterra)
 
-# github
-if (!require(ags)) remotes::install_github("sumtxt/ags", force=TRUE)
-library(ags)
-
-
-### STEP 1: GV - ADMINISTRATIVE CHANGES 2020 - 2022 ################################################
+### GV - ADMINISTRATIVE CHANGES 2020 - 2022 ########################################################
 
 # INKAR correspondence tables refer to changes BETWEEN years y1 and y2 at 31.12.
 # = equivalent to GV change tables WITHIN y2
@@ -167,33 +155,3 @@ print(tibble(df_kre %>% filter(area_w != 1)), n = 50)
 print(tibble(df_kre %>% filter(kre_ars_2020 == "16056")), n = 50) # check: eisenach -> wartburgkreis
 # write
 write_delim(df_kre, paste0(data, "/external/processed/ars/xwalk_kre_2020_2022.csv"), delim = ";")
-
-
-### STEP 2: XWALK GEO ENTITIES - WOHNGEBIET / PLZ -> GEM/GVB/KRE ###################################
-
-# where to get the plz info? ideally 2022 areas with pop
-# wohngebiet area: use intersections as weights
-
-### Shapefiles German administrative units #########################################################
-# https://daten.gdz.bkg.bund.de/produkte/vg/vg5000_1231/aktuell/vg5000_12-31.utm32s.shape.ebenen.zip
-# RBZ seem to be incomplete
-# historically available since 2020: possible to use for xwalk if area is not noted somewhere else
-p <- vect(paste0(data, "/external/raw/Shapefiles/vg/vg5000_ebenen_1231/VG5000_KRS.shp"))
-
-
-### merge plz (info from 31.12.2021, accessed Feb 28, 2023; last updated Feb 2022)
-# https://downloads.suche-postleitzahl.org/v2/public/zuordnung_plz_ort.csv
-# df_ags_plz <- read_csv(paste0(data, "/external/raw/OSM/zuordnung_plz_ort.csv"))
-# dfs_gv <- lapply(dfs_gv, function(df_gv, df_ags_plz) {
-#     # create ags for merging (=ars without gemeindevarband code in between)
-#     if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars_2022 = gem_ars)
-#     df_gv <- df_gv %>% mutate(ags = paste0(substr(gem_ars_2022,1,5), substr(gem_ars_2022,10,12)))
-#     # merge
-#     df_gv <- merge(df_gv, df_ags_plz %>% select(ags, plz), by="ags", all.x = TRUE, all.y = FALSE)
-#     # rename again
-#     if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars = gem_ars_2022)
-#     # drop ags
-#     df_gv <- df_gv %>% select(-c(ags))
-#     },
-#     df_ags_plz
-#   )

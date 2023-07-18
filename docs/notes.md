@@ -19,7 +19,7 @@ Data approach:
 
 Merge everything in one dataset per geo level? or all in one?
 - Wohngebiet
-- PLZ 
+- PLZ
 - Kreis
   - get shapefiles for aggregation
   - assignment possibilities:

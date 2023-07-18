@@ -40,6 +40,9 @@ library(ags)
 # very small changes or simultaneous and counteracting changes are omitted
 # (e.g. 20% of gem1 go to gem2 and approx. vice versa)
 
+# target ars from 31.12.2022 GV
+df_ars_2022 <- read_csv(paste0(data, "/external/processed/ars/ars2022.csv"))
+
 ### function creating ars correspondence table per year
 process_gvchange <- function(year) {
   # set in and out ars x year for clarity
@@ -64,8 +67,8 @@ process_gvchange <- function(year) {
   # merge to base ars
   df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", year_in, ".csv"))
   df_ars <- df_ars %>% 
-    select(gem_ars_full, gem_ars, gem_name, area, pop) %>%
-    rename_with(~ paste0(.x, "_", year_in), starts_with("gem_"))
+    select(!c(pop_m, pop_w, year)) %>%
+    rename_with(~ paste0(.x, "_", year_in), !matches("^area.*|^pop.*"))
   df_ars <- merge(df_ars, gv, by = ars_in, all.x = TRUE)
   # default values: no change to ars or fully dissolved in new entity
   df_ars[is.na(df_ars[[ars_out]]), ars_out] <- df_ars[is.na(df_ars[[ars_out]]), ars_in]
@@ -86,19 +89,30 @@ df_gem <- merge(
 # multiply weights
 df_gem$area_w <- df_gem$area_w_2020 * df_gem$area_w_2021
 df_gem$pop_w <- df_gem$pop_w_2020 * df_gem$pop_w_2021
-# keep relevant columns and save
-df_gem <- df_gem %>% 
-  select(gem_ars_full_2020, gem_ars_2020, gem_name_2020, area, pop, area_w, pop_w, gem_ars_full_2022)
+# merge 2022 names and keep relevant columns
+df_gem <- merge(
+  df_gem,
+  df_ars_2022 %>% select(gem_ars_full, gem_ars, gem_name) %>% rename_with(~ paste0(.x, "_2022")),
+  by.x = "gem_ars_full_2022"
+)
+df_gem <- df_gem %>%
+  select(!matches("^pop_w_.*|^area_w_")) %>%
+  select(gem_ars_full_2020, gem_ars_2020, gem_name_2020, area, pop, area_w, pop_w, 
+    gem_ars_full_2022, gem_ars_2022, gem_name_2022, colnames(.))
 # most changes are negligible (direct assignment would be ok)
 print(df_gem %>% filter(area_w < 1 & area_w > 0), n = 300, na.print = "")
-# write
-write_delim(df_gem, paste0(data, "/external/processed/ars/xwalk_gem_2020_2022.csv"), delim = ";")
+# write (omit area and pop info, which is kept for the following aggregation)
+write_delim(
+  df_gem %>% select(!matches("^area$|^pop$|^bl.*|^rbz.*|^kre.*|^gvb.*")), 
+  paste0(data, "/external/processed/ars/xwalk_gem_2020_2022.csv"), 
+  delim = ";"
+  )
 
 ### aggregate for GVB and KRE
 df_gvb <- df_gem %>%
   mutate(gvb_ars_2020 = substr(gem_ars_full_2020, 1, 9)) %>%
   mutate(gvb_ars_2022 = substr(gem_ars_full_2022, 1, 9)) %>%
-  add_count(gem_ars_full_2020, name = "dupn") %>%
+  add_count(gem_ars_full_2020, name = "dupn") %>% # use as factor to count gem duplicates just once
   mutate(
     area_tot = sum(area / dupn, na.rm = TRUE),
     pop_tot = sum(pop / dupn, na.rm = TRUE),
@@ -109,10 +123,17 @@ df_gvb <- df_gem %>%
     pop_w = sum(pop * pop_w, na.rm = TRUE) / pop_tot,
     .by = c(gvb_ars_2020, gvb_ars_2022)
     ) %>%
-  distinct(gvb_ars_2020, gvb_ars_2022, .keep_all = TRUE) %>%
-  select(starts_with("gvb_"), area_w, pop_w)
+  distinct(gvb_ars_2020, gvb_ars_2022, .keep_all = TRUE)
 df_gvb[is.na(df_gvb$area_w), "area_w"] <- 1
 df_gvb[is.na(df_gvb$pop_w), "pop_w"] <- 1
+# merge 2022 names and keep relevant columns
+df_gvb <- merge(
+  df_gvb,
+  df_ars_2022 %>% distinct(gvb_ars, gvb_name) %>% rename_with(~ paste0(.x, "_2022")),
+  by.x = "gvb_ars_2022"
+)
+df_gvb <- df_gvb %>% select(gvb_ars_2020, gvb_name_2020, area_w, pop_w, gvb_ars_2022, gvb_name_2022)
+# check
 print(tibble(df_gvb %>% filter(area_w != 1)), n = 50)
 # write
 write_delim(df_gvb, paste0(data, "/external/processed/ars/xwalk_gvb_2020_2022.csv"), delim = ";")
@@ -120,7 +141,7 @@ write_delim(df_gvb, paste0(data, "/external/processed/ars/xwalk_gvb_2020_2022.cs
 df_kre <- df_gem %>%
   mutate(kre_ars_2020 = substr(gem_ars_full_2020, 1, 5)) %>%
   mutate(kre_ars_2022 = substr(gem_ars_full_2022, 1, 5)) %>%
-  add_count(gem_ars_full_2020, name = "dupn") %>%
+  add_count(gem_ars_full_2020, name = "dupn") %>% # use as factor to count gem duplicates just on
   mutate(
     area_tot = sum(area / dupn, na.rm = TRUE),
     pop_tot = sum(pop / dupn, na.rm = TRUE),
@@ -131,12 +152,19 @@ df_kre <- df_gem %>%
     pop_w = sum(pop * pop_w, na.rm = TRUE) / pop_tot,
     .by = c(kre_ars_2020, kre_ars_2022)
     ) %>%
-  distinct(kre_ars_2020, kre_ars_2022, .keep_all = TRUE) %>%
-  select(starts_with("kre_"), area_w, pop_w)
+  distinct(kre_ars_2020, kre_ars_2022, .keep_all = TRUE)
 df_kre[is.na(df_kre$area_w), "area_w"] <- 1
 df_kre[is.na(df_kre$pop_w), "pop_w"] <- 1
+# merge 2022 names and keep relevant columns
+df_kre <- merge(
+  df_kre,
+  df_ars_2022 %>% distinct(kre_ars, kre_name) %>% rename_with(~ paste0(.x, "_2022")),
+  by.x = "kre_ars_2022"
+)
+df_kre <- df_kre %>% select(kre_ars_2020, kre_name_2020, area_w, pop_w, kre_ars_2022, kre_name_2022)
+# check
 print(tibble(df_kre %>% filter(area_w != 1)), n = 50)
-print(tibble(df_kre %>% filter(kre_ars_2020 == "16056")), n = 50) # check: eisenach -> erfurt
+print(tibble(df_kre %>% filter(kre_ars_2020 == "16056")), n = 50) # check: eisenach -> wartburgkreis
 # write
 write_delim(df_kre, paste0(data, "/external/processed/ars/xwalk_kre_2020_2022.csv"), delim = ";")
 

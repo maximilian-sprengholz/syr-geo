@@ -28,3 +28,7 @@ Merge everything in one dataset per geo level? or all in one?
     - wohngebiet shared area as weight per kreis (would only work with expanded dataset and corresponding weights similar to income estimation in Microcensus; for any estimation SE clustering is necessary)
 - RB (direct correspondence)
 
+# Colloquium
+
+
+

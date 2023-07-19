@@ -31,127 +31,161 @@ library(pbapply)
 # target ars from 31.12.2022 GV
 df_ars_2022 <- read_csv(paste0(data, "/external/processed/ars/ars2022.csv"))
 
-### function creating ars correspondence table per year
+### function creating ars correspondence table per year and ars lvl
 process_gvchange <- function(year) {
+  
   # set in and out ars x year for clarity
   year_in <- year - 1
   year_out <- year 
   ars_in <- paste0("gem_ars_full_", year_in)
   ars_out <- paste0("gem_ars_full_", year_out)
+  
   # read and name
   fpath <- paste0(data, "/external/raw/Destatis/GV/3112", year_out, "_Aenderungen_GV.xlsx")
   gv <- read_excel(fpath, sheet = 2, skip = 4, col_names = FALSE)
   gv <- gv[, c(2, 3, 6, 7, 8, 9)]
-  colnames(gv) <- c("lvl", ars_in, "type", "area", "pop", ars_out)
-  gv$area <- as.numeric(gv$area)
-  gv$pop <- as.numeric(gv$pop)
+  colnames(gv) <- c("lvl", ars_in, "type", "area_shared", "pop_shared", ars_out)
+  gv$area_shared <- as.numeric(gv$area_shared)/1000000 # km2
+  gv$pop_shared <- as.numeric(gv$pop_shared)
+  
   # look only at changes for GEM; omit namechanges (these will be available from the GV per year)
   gv <- gv %>% filter(lvl == "Gemeinde" & type != "4") %>% select(-c(lvl, type))
-  # generate weights
-  gv <- gv %>% 
-    mutate(area_w = area / sum(area, na.rm = TRUE), .by = ars_in) %>%
-    mutate(pop_w = pop / sum(pop, na.rm = TRUE), .by = ars_in) %>%
-    select(!c(area, pop)) # changes only, get area for all units from base ars file
-  # merge to base ars
+  
+  # merge to base ars to get full area/pop and names for in
   df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", year_in, ".csv"))
-  df_ars <- df_ars %>% 
+  df_ars <- df_ars %>%
     select(!c(pop_m, pop_w, year)) %>%
-    rename_with(~ paste0(.x, "_", year_in), !matches("^area.*|^pop.*"))
-  df_ars <- merge(df_ars, gv, by = ars_in, all.x = TRUE)
-  # default values: no change to ars or fully dissolved in new entity
-  df_ars[is.na(df_ars[[ars_out]]), ars_out] <- df_ars[is.na(df_ars[[ars_out]]), ars_in]
-  df_ars[is.na(df_ars$area_w), "area_w"] <- 1
-  df_ars[is.na(df_ars$pop_w), "pop_w"] <- 1
+    rename_with(~ paste0(.x, "_", year_in), !matches("^area.*|^pop.*")) %>%
+    rename(area_in = area, pop_in = pop) # are area value consistent between GV and change files?
+  df <- merge(df_ars, gv, by = ars_in, all.x = TRUE)
+  df[is.na(df[[ars_out]]), ars_out] <- df[is.na(df[[ars_out]]), ars_in] # no change in ars if mi
+  
+  # merge to base ars to get full area/pop and names for out
+  df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", year_out, ".csv"))
+  df_ars <- df_ars %>%
+    select(!c(area, pop, pop_m, pop_w, year)) %>%
+    rename_with(~ paste0(.x, "_", year_out))
+  df <- merge(df, df_ars, by = ars_out, all.x = TRUE)
+  
+  # generate weights
+  # w_abs -> for absolute values, e.g. counts: reference is the in area/pop (n of x -> y)
+  # w_rel -> for relative values, e.g. %; reference is the out area/pop (% of x -> % of y)
+  df <- df %>% 
+    mutate(
+      # replace missing values (= no change to entity, full pop or area)
+      area_shared = ifelse(is.na(area_shared), area_in, area_shared),
+      pop_shared = ifelse(is.na(pop_shared), pop_in, pop_shared),
+      ) %>%
+    mutate(
+      # calculate sum of area / pop for new entity (this is different from the out year values!)
+      area_out = sum(area_shared, na.rm = TRUE),
+      pop_out = sum(pop_shared, na.rm = TRUE),
+      .by = all_of(ars_out)
+      ) %>%
+    mutate(
+      area_w_abs = area_shared / area_in,
+      area_w_rel = area_shared / area_out,
+      pop_w_abs = ifelse(pop_in == 0, 1, pop_shared / pop_in),
+      pop_w_rel = ifelse(pop_out == 0, 1, pop_shared / pop_out)
+    )
+  
+  ### save in list of dfs, aggregate for gvb and kre (rbz and bl irrelevant, but possible)
+  lvls <- c("bl", "rbz", "kre", "gvb", "gem")
+  dfs <- list()
+  
+  # gem
+  lvl <- "gem"
+  dfs[[lvl]] <- df %>% 
+    select(!matches(paste0(lvls[!lvls %in% lvl], "_.*", collapse = "|"))) %>%
+    rename_with(~ paste0(.x, "_", year_in), matches(".*_w_.*"))
+  
+  # aggregation levels
+  for (lvl in c("gvb", "kre")) {
+    ars_in <- paste0(lvl, "_ars_", year_in)
+    ars_out <- paste0(lvl, "_ars_", year_out)
+    dfs[[lvl]] <- df %>%
+      add_count(!!sym(paste0("gem_ars_full_", year_in)), name = "dupn") %>% # factor for gem dups
+      mutate(
+        area_in = sum(area_in / dupn),
+        pop_in = sum(pop_in / dupn),
+        .by = all_of(ars_in)
+        ) %>%
+      mutate(
+        area_out = sum(area_shared),
+        pop_out = sum(pop_shared),
+        .by = all_of(ars_out)
+        ) %>%
+      mutate(
+        area_shared = sum(area_shared),
+        pop_shared = sum(pop_shared),
+        .by = all_of(c(ars_in, ars_out))
+        ) %>%
+      distinct(!!sym(ars_in), !!sym(ars_out), .keep_all = TRUE) %>%
+      mutate(
+        area_w_abs = area_shared / area_in,
+        area_w_rel = area_shared / area_out,
+        pop_w_abs = ifelse(pop_in == 0, 1, pop_shared / pop_in),
+        pop_w_rel = ifelse(pop_out == 0, 1, pop_shared / pop_out)
+        ) %>%
+      select(!matches(paste0(lvls[!lvls %in% lvl], "_.*", collapse = "|"))) %>%
+      select(!c(dupn)) %>%
+      rename_with(~ paste0(.x, "_", year_in), matches(".*_w_.*"))
+    }
+
   # return
-  return(df_ars %>% rename_with(~ paste0(.x, "_", year_in), ends_with("_w")))
-}
+  return(dfs)
+  }
 
-### do for 2021 and 2022, merge together
-df_gem <- merge(
-  process_gvchange(2021), 
-  process_gvchange(2022) %>% select(!c(area, pop)), 
-  by = "gem_ars_full_2021", 
-  all.x = TRUE,
-  all.y = TRUE
-  )
-# multiply weights
-df_gem$area_w <- df_gem$area_w_2020 * df_gem$area_w_2021
-df_gem$pop_w <- df_gem$pop_w_2020 * df_gem$pop_w_2021
-# merge 2022 names and keep relevant columns
-df_gem <- merge(
-  df_gem,
-  df_ars_2022 %>% select(gem_ars_full, gem_ars, gem_name) %>% rename_with(~ paste0(.x, "_2022")),
-  by.x = "gem_ars_full_2022"
-)
-df_gem <- df_gem %>%
-  select(!matches("^pop_w_.*|^area_w_")) %>%
-  select(gem_ars_full_2020, gem_ars_2020, gem_name_2020, area, pop, area_w, pop_w, 
-    gem_ars_full_2022, gem_ars_2022, gem_name_2022, colnames(.))
-# most changes are negligible (direct assignment would be ok)
-print(df_gem %>% filter(area_w < 1 & area_w > 0), n = 300, na.print = "")
-# write (omit area and pop info, which is kept for the following aggregation)
-write_delim(
-  df_gem %>% select(!matches("^area$|^pop$|^bl.*|^rbz.*|^kre.*|^gvb.*")), 
-  paste0(data, "/external/processed/ars/xwalk_gem_2020_2022.csv"), 
-  delim = ";"
-  )
+merge_gvchange <- function(years, lvls) {
 
-### aggregate for GVB and KRE
-df_gvb <- df_gem %>%
-  mutate(gvb_ars_2020 = substr(gem_ars_full_2020, 1, 9)) %>%
-  mutate(gvb_ars_2022 = substr(gem_ars_full_2022, 1, 9)) %>%
-  add_count(gem_ars_full_2020, name = "dupn") %>% # use as factor to count gem duplicates just once
-  mutate(
-    area_tot = sum(area / dupn, na.rm = TRUE),
-    pop_tot = sum(pop / dupn, na.rm = TRUE),
-    .by = c(gvb_ars_2020)
-    ) %>%
-  mutate(
-    area_w = sum(area * area_w, na.rm = TRUE) / area_tot,
-    pop_w = sum(pop * pop_w, na.rm = TRUE) / pop_tot,
-    .by = c(gvb_ars_2020, gvb_ars_2022)
-    ) %>%
-  distinct(gvb_ars_2020, gvb_ars_2022, .keep_all = TRUE)
-df_gvb[is.na(df_gvb$area_w), "area_w"] <- 1
-df_gvb[is.na(df_gvb$pop_w), "pop_w"] <- 1
-# merge 2022 names and keep relevant columns
-df_gvb <- merge(
-  df_gvb,
-  df_ars_2022 %>% distinct(gvb_ars, gvb_name) %>% rename_with(~ paste0(.x, "_2022")),
-  by.x = "gvb_ars_2022"
-)
-df_gvb <- df_gvb %>% select(gvb_ars_2020, gvb_name_2020, area_w, pop_w, gvb_ars_2022, gvb_name_2022)
-# check
-print(tibble(df_gvb %>% filter(area_w != 1)), n = 50)
+  # gather all based on first year changes
+  dfs <- process_gvchange(years[1])
+
+  # gather and merge info of all other yearly changes
+  for (year in years[2:length(years)]) {
+    # fetch yearly changes
+    df_current <- process_gvchange(year)
+    # merge years by level
+    for (lvl in lvls) {
+        mergecol <- paste0(lvl, "_ars_", year-1)
+        # merge
+        dfs[[lvl]] <- merge(
+          dfs[[lvl]] %>% 
+            select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[1]-1)))),
+          df_current[[lvl]] %>%
+            select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[length(years)])))),
+          by = mergecol, 
+          all.x = TRUE,
+          all.y = TRUE
+          )
+        dfs[[lvl]] <- dfs[[lvl]] %>% select(!matches(paste0(".*_", year-1)))
+      }  
+    }
+
+  # calculate weights over years
+  for (lvl in lvls) {  
+    for (w in c("area_w_abs", "area_w_rel", "pop_w_abs", "pop_w_rel")) {
+      dfs[[lvl]][[w]] <- apply(dfs[[lvl]] %>% select(matches(paste0(w, "_.*"))), 1, prod)
+    }
+    dfs[[lvl]] <- dfs[[lvl]] %>% select(!matches(paste(".*_w_.*_\\d+"))) 
+  }
+
+  # return
+  return(dfs)
+
+  }
+
+# run
+dfs <- merge_gvchange(2021:2022, c("gem", "gvb", "kre"))
 # write
-write_delim(df_gvb, paste0(data, "/external/processed/ars/xwalk_gvb_2020_2022.csv"), delim = ";")
-
-df_kre <- df_gem %>%
-  mutate(kre_ars_2020 = substr(gem_ars_full_2020, 1, 5)) %>%
-  mutate(kre_ars_2022 = substr(gem_ars_full_2022, 1, 5)) %>%
-  add_count(gem_ars_full_2020, name = "dupn") %>% # use as factor to count gem duplicates just on
-  mutate(
-    area_tot = sum(area / dupn, na.rm = TRUE),
-    pop_tot = sum(pop / dupn, na.rm = TRUE),
-    .by = c(kre_ars_2020)
-    ) %>%
-  mutate(
-    area_w = sum(area * area_w, na.rm = TRUE) / area_tot,
-    pop_w = sum(pop * pop_w, na.rm = TRUE) / pop_tot,
-    .by = c(kre_ars_2020, kre_ars_2022)
-    ) %>%
-  distinct(kre_ars_2020, kre_ars_2022, .keep_all = TRUE)
-df_kre[is.na(df_kre$area_w), "area_w"] <- 1
-df_kre[is.na(df_kre$pop_w), "pop_w"] <- 1
-# merge 2022 names and keep relevant columns
-df_kre <- merge(
-  df_kre,
-  df_ars_2022 %>% distinct(kre_ars, kre_name) %>% rename_with(~ paste0(.x, "_2022")),
-  by.x = "kre_ars_2022"
-)
-df_kre <- df_kre %>% select(kre_ars_2020, kre_name_2020, area_w, pop_w, kre_ars_2022, kre_name_2022)
-# check
-print(tibble(df_kre %>% filter(area_w != 1)), n = 50)
-print(tibble(df_kre %>% filter(kre_ars_2020 == "16056")), n = 50) # check: eisenach -> wartburgkreis
-# write
-write_delim(df_kre, paste0(data, "/external/processed/ars/xwalk_kre_2020_2022.csv"), delim = ";")
+lapply(
+  names(dfs), 
+  function(lvl) {
+    write_delim(
+      dfs[[lvl]],
+      paste0(data, "/external/processed/ars/xwalk_", lvl, "_2020_2022.csv"), 
+      delim = ";"
+      )
+    TRUE
+    }
+  )

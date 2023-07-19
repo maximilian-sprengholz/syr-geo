@@ -79,9 +79,9 @@ p_kre <- project(
   "epsg:4326" 
   )
 
-### estimate intersection area (increadibly easy to do with terra, the long output is perfect)
+### estimate intersection area (incredibly easy to do with terra, the long output is perfect)
 # there are probably some inaccuracies in the postcode shapes which lead to non-perfect alignment
-# I guess it is ok to just keep those intersections contributing at least 1 % of the postcode area
+# -> just keep those intersections contributing at least 1 % of the out area (also for wohngebiete)
 
 geo_map <- list(
   geos_in = list(
@@ -136,7 +136,7 @@ for (geo_out in names(geo_map$geos_out)) {
       paste0(geo_in, "_ars"), paste0(geo_in, "_area"), idcols, paste0(geo_out, "_area"),
       "area_shared", "area_w_abs", "area_w_rel", "toosmall", "area_upscale"
       )
-    p <- p %>% arrange(all_of(c(idcols, paste0(geo_in, "_ars"))))
+    p <- p %>% arrange(across(all_of(c(idcols, paste0(geo_in, "_ars")))))
 
     # GEM specific
     if (geos_in == "gem") {

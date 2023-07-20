@@ -162,12 +162,14 @@ merge_gvchange <- function(years, lvls) {
       }  
     }
 
-  # calculate weights over years
+  # calculate weights over years; subset and order
   for (lvl in lvls) {  
     for (w in c("area_w_abs", "area_w_rel", "pop_w_abs", "pop_w_rel")) {
-      dfs[[lvl]][[w]] <- apply(dfs[[lvl]] %>% select(matches(paste0(w, "_.*"))), 1, prod)
+      dfs[[lvl]][[w]] <- apply(dfs[[lvl]] %>% select(matches(paste0(w, "_.*"))), 1, function(x) { round(prod(x), 3) })
     }
-    dfs[[lvl]] <- dfs[[lvl]] %>% select(!matches(paste(".*_w_.*_\\d+"))) 
+    dfs[[lvl]] <- dfs[[lvl]] %>% 
+      select(!matches(paste(".*_w_.*_\\d+"))) %>%
+      select(matches(paste0(years[1] - 1)), matches("_w_"), matches(paste0(years[length(years)])))
   }
 
   # return

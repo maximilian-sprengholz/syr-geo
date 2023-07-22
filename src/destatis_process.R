@@ -57,13 +57,13 @@ muslimshare <- tibble(
 )
 
 # loop over yearly files
-refyear <- 2020
-for (year in 1998:refyear) {
+for (year in 1998:2022) {
   
   ### read raw data
   df_year <- read_delim(
     paste0(data, "/external/raw/Destatis/Ausländerstatistik/kre_", year, ".csv"),
-    delim = ";"
+    delim = ";",
+    show_col_types = FALSE
     )
   # keep relevant columns and label them
   df_year <- df_year %>% 
@@ -117,8 +117,12 @@ for (year in 1998:refyear) {
   if (year >= 2008) df_year[df_year$kre_ars %in% c("06611", "06633"), "kre_ars_merged"] <- "06699" # Kassel
   if (year >= 2013) df_year[df_year$kre_ars %in% c("12052", "12071"), "kre_ars_merged"] <- "12099" # Cottbus
   # merge pop data by which to weight
-  df_pop <- read_delim(paste0(data, "/external/raw/Destatis/Bevölkerung/kre.csv"), delim = ";")  
-  df_year <- merge(df_year, df_pop %>% filter(zeit == paste0("31.12.", year)), by="kre_ars")
+  df_pop <- read_delim(
+    paste0(data, "/external/raw/Destatis/Bevölkerung/kre.csv"), 
+    delim = ";",
+    show_col_types = FALSE
+    )  
+  df_year <- merge(df_year, df_pop %>% filter(zeit == paste0("31.12.", year)), by = "kre_ars")
   # weight
   vars <- c("auslaender", "auslaender_muslim_staat", "auslaender_muslim_est")
   df_year <- df_year %>%
@@ -130,79 +134,55 @@ for (year in 1998:refyear) {
     mutate_at(
       vars,
       ~ round(.x * pop/popsum)
+      ) %>%
+    select(!c(pop, popsum, kre_ars_merged))
+  
+  ### reshape to wide and gather new varnames
+  df_year <- df_year %>%
+    rename(year = zeit) %>%
+    mutate(year = as.numeric(substr(year, 7, 10))) %>%
+    pivot_wider(
+      names_from = geschlecht, 
+      values_from = all_of(vars)
       )
+  colnames(df_year) <- gsub("_insgesamt", "", colnames(df_year))
+  colnames(df_year) <- gsub("_männlich", "_m", colnames(df_year))
+  colnames(df_year) <- gsub("_weiblich", "_w", colnames(df_year))
+  vars <- colnames(df_year)[str_detect(colnames(df_year), "auslaender")]
 
-### ags crosswalk until 2020
-df_xwalk <- NULL
-for (g in unique(df_year$geschlecht)) {
-  ars <- xwalk_ags(
-    data = df_year %>% 
-      filter(!is.na(pop) & geschlecht == g) %>%
-      select(!c(geschlecht)) %>%
-      mutate(zeit = as.numeric(substr(zeit, 7, 10))),
-    ags = "kre_ars",
-    time = "zeit",
-    xwalk = "xd20",
-    variables = vars,
-    weight = "pop"
+  ### xwalks by time
+  # first to 2020
+  if (year <= 2019) {
+    df_year <- xwalk_ags(
+      data = df_year,
+      ags = "kre_ars",
+      time = "year",
+      xwalk = "xd20",
+      variables = vars,
+      weight = "pop"
+      )
+    df_year <- df_year %>% rename(kre_ars = ags20)
+    arsref <- 2020
+  } else {
+    arsref <- year
+  }
+  # then to 2022
+  df_year <- xwalk22(
+    df = df_year, 
+    geo = "kre", 
+    arscol = "kre_ars",
+    arsref = arsref,
+    yearcol = "year", 
+    weight = "pop",
+    weightref = "abs",
+    variables = vars
     )
-  if (g != "insgesamt") {
-    if (g == "männlich") sfx <- "_m" else sfx <- "_f"
-    ars <- rename_with(ars, ~ paste0(.x, sfx), starts_with("auslaender"))
-    ars <- ars %>% ungroup() %>% select(!c(zeit, ags20))
-  }
-  df_xwalk <- bind_cols(df_xwalk, ars %>% ungroup())
-  }
 
-  ### merge all years
-  df <- bind_rows(df, df_xwalk)
+  # merge all years
+  df <- bind_rows(df, df_year)
 
 }
 
-# label
-df <- df %>% rename(year = zeit, kre_ars = ags20) %>% mutate(kre_ars_ref = refyear) 
-df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", ref, ".csv"))
-df_ars <- df_ars %>% distinct(kre_ars, kre_name)
-df <- merge(df, df_ars, by="kre_ars")
-cols <- colnames(df)
-firstcols <- c("kre_ars", "kre_name", "kre_ars_ref", "year")
-df <- df %>% select(all_of(c(firstcols, cols[!cols %in% firstcols])))
-
-### xwalk again for 2020 -> 2022
-
-# generic function
-xwalk22 <- function(df, lvl, arscol, arsref = 2020, yearcol = NA, weight = "pop", variables) {
-  # read correspondence table
-  df_xwalk <- read_delim(
-    paste0(data, "/external/processed/ars/xwalk_", tolower(lvl), "_", arsref, "_2022.csv"),
-    delim = ";"
-    )
-  # merge to passed df
-  df <- merge(df, df_xwalk, by.x = arscol, by.y = paste0(lvl, "_ars_", arsref), all.x = TRUE)
-  # grouping
-  arsnew = paste0(lvl, "_ars_2022")
-  namenew = paste0(lvl, "_name_2022")
-  if (!is.na(yearcol)) groupcols <- c(arsnew, namenew, yearcol) else groupcols <- c(arsnew, namenew)
-  # weight data
-  df <- df %>% 
-    mutate_at(variables, ~ round(.x * .data[[paste0(weight, "_w")]])) %>%
-    group_by_at(groupcols) %>%
-    summarize(across(variables, ~ sum(.x, na.rm = TRUE))) %>%
-    rename(!!sym(arscol) := arsnew) %>%
-    rename(!!sym(paste0(arscol, "_name")) := namenew) %>%
-    mutate(!!sym(paste0(arscol, "_ref")) := 2022) %>%
-    select(matches(paste0("^", arscol, ".*")), !!sym(yearcol), sort(colnames(.)))
-}
-
-# xwalk
-df <- xwalk22(
-  df = df, 
-  lvl = "kre", 
-  arscol = "kre_ars",
-  yearcol = "year", 
-  weight = "pop", 
-  variables = colnames(df)[str_detect(colnames(df), "^auslaender_\\S*")]
-  )
 # save
 write_delim(df, paste0(data, "/external/processed/Destatis/kre.csv"), delim = ";")
 

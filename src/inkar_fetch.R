@@ -47,7 +47,7 @@ for (geo in geos) {
       vars <- rename(vars, IndikatorID = Gruppe)
       vars$Raumbezug <- geo # not set in returns for Gemeinden
       df_vars <<- bind_rows(df_vars, vars)
-      Sys.sleep(1)
+      Sys.sleep(0.5)
       },
     geo = geo
     )    
@@ -64,17 +64,23 @@ df_vars <- df_vars %>%
   distinct(BereichID, IndikatorID, .keep_all = TRUE)
 df_vars_metadata <- NULL
 quietly <- pbsapply(
-  df_vars$IndikatorID, 
+  df_vars$IndikatorID,
   function(id) {
     metadata <- get_metadata(variable = id)
     rename(metadata, metadataID = ID)
     df_vars_metadata <<- bind_rows(df_vars_metadata, metadata)
-    Sys.sleep(1)
+    Sys.sleep(0.5)
     }
   )   
 df_vars <- bind_cols(df_vars, df_vars_metadata)
+df_vars <- df_vars %>% distinct(KurznamePlus, .keep_all = TRUE) # omit SDG doublettes (not perfect)
 df_vars$SyrGeoName <- tolower(gsub("\\s", "_", df_vars$Kurzname))
 df_vars$FetchStatus <- 0
+df_vars$JahrMax <- NA
+df_vars$JahrMin <- NA
+df_vars$JahrModus <- NA
+df_vars <- df_vars %>% 
+  select(IndikatorID, KurznamePlus, Raumbezug, JahrMax, JahrMin, JahrModus, colnames(.))
 write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
 
 
@@ -84,18 +90,31 @@ write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"
 year <- 2020
 df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", year, ".csv"))
 df_ars <- df_ars %>% 
-  select(all_of(sort(c(paste0(tolower(geos), "_ars"), paste0(tolower(geos), "_name")))))
+  select(all_of(c(paste0(tolower(geos), "_ars"), paste0(tolower(geos), "_name"), "pop")))
 
 # fetch data; keep only most recent (for dynamics, additional requests are easy to do)
 # merge to dataframe for each level
 for (geo in geos) {
   # do if non-empty
   if (sum(df_vars$Raumbezug == geo) > 0) {
-    # df with ars and name of geo entity
+    # df with ars, name, and pop of geo entity
     arscol <- paste0(tolower(geo), "_ars")
     namecol <- paste0(tolower(geo), "_name")
-    df <- df_ars %>% distinct(!!sym(arscol), !!sym(namecol))
-    df[paste0(arscol, "_ref")] <- year # set ars ref (INKAR harmonized to most recent year)
+    popcol <- paste0(tolower(geo), "_pop")
+    if (file.exists(paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"))) {
+      df <- read_delim(
+        paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), 
+        delim = ";"
+        )
+    } else {
+      # we need the pop count bc data is missing 
+      df <- df_ars %>%
+        mutate(pop = sum(pop, na.rm = TRUE), .by = all_of(c(arscol))) %>% 
+        rename(!!sym(popcol) := pop) %>% 
+        distinct(!!sym(arscol), !!sym(namecol), !!sym(popcol))
+      df[paste0(arscol, "_ref")] <- year # set ars ref (INKAR harmonized to most recent year)
+    }
+    populated <- unlist(df[df[[popcol]] != 0, arscol]) # weird year values for non-populated areas
     # get data (list of dfs is returned)
     df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, "FetchStatus"] <- unlist(pbapply(
       df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, ],
@@ -103,18 +122,27 @@ for (geo in geos) {
       function(row, arscol) {
         tryCatch({
           # get data
-          returns <- get_data(variable = row["IndikatorID"], geography = row["Raumbezug"])
+          returns <- get_data(variable = row[["IndikatorID"]], geography = row[["Raumbezug"]])
           # keep most recent
           returns <- returns %>% 
             select(!c(Raumbezug, Indikator)) %>%
-            arrange(Schlüssel, desc(Zeit)) %>% 
+            mutate(Zeit = as.numeric(Zeit)) %>%
+            arrange(Schlüssel, desc(Zeit)) %>%
             distinct(Schlüssel, .keep_all = TRUE)
+          # time is not necessarily consistent! -> log
+          years <- unlist(returns[returns[["Schlüssel"]] %in% populated, "Zeit"])
+          uyears <- unique(years)
+          uyears <- uyears[!is.na(uyears)]
+          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "JahrMax"] <<- max(uyears)
+          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "JahrMin"] <<- min(uyears)
+          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], 
+            "JahrModus"] <<- uyears[which.max(tabulate(match(years, uyears)))]
           # use consistent column names and indicator name derived from Kurzname
-          name <- row["SyrGeoName"]
+          name <- row[["SyrGeoName"]]
           colnames(returns) <- c(arscol, name, paste0(name, "_year"))
           # merge
           df <<- merge(df, returns, by = arscol, all.x = TRUE, all.y = FALSE)
-          Sys.sleep(1)
+          Sys.sleep(0.5)
           return(1)
           },
         error = function(e) {
@@ -124,12 +152,12 @@ for (geo in geos) {
         }, 
       arscol
       ))
+
     # save dataset
-    write_delim(df, paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), delim = ";")
+    write_delim(df, paste0(data, "/external/raw/INKAR/", tolower(geo), ".csv"), delim = ";")
+
     }
   }
 
 # save progress to variable index
 write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
-
-# total duration ~35 minutes

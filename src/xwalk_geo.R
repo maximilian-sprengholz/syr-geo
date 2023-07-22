@@ -134,9 +134,11 @@ for (geo_out in names(geo_map$geos_out)) {
     if (geo_out == "wohngebiet") idcols <- groupcols else idcols <- geo_out
     colnames(p) <- c(
       paste0(geo_in, "_ars"), paste0(geo_in, "_area"), idcols, paste0(geo_out, "_area"),
-      "area_shared", "area_w_abs", "area_w_rel", "toosmall", "area_upscale"
+      "area_shared", "area_w_abs", "area_w_rel"
       )
-    p <- p %>% arrange(across(all_of(c(idcols, paste0(geo_in, "_ars")))))
+    p <- p %>% 
+      select(all_of(c(paste0(geo_in, "_ars"), "area_w_abs", "area_w_rel", idcols))) %>%
+      arrange(across(all_of(c(idcols, paste0(geo_in, "_ars")))))
 
     # GEM specific
     if (geos_in == "gem") {

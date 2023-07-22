@@ -60,7 +60,7 @@ process_gvchange <- function(year) {
   df <- merge(df_ars, gv, by = ars_in, all.x = TRUE)
   df[is.na(df[[ars_out]]), ars_out] <- df[is.na(df[[ars_out]]), ars_in] # no change in ars if mi
   
-  # merge to base ars to get full area/pop and names for out
+  # merge base ars to get full area/pop and names for out
   df_ars <- read_csv(paste0(data, "/external/processed/ars/ars", year_out, ".csv"))
   df_ars <- df_ars %>%
     select(!c(area, pop, pop_m, pop_w, year)) %>%
@@ -142,52 +142,64 @@ merge_gvchange <- function(years, lvls) {
   dfs <- process_gvchange(years[1])
 
   # gather and merge info of all other yearly changes
-  for (year in years[2:length(years)]) {
-    # fetch yearly changes
-    df_current <- process_gvchange(year)
-    # merge years by level
-    for (lvl in lvls) {
-        mergecol <- paste0(lvl, "_ars_", year-1)
-        # merge
-        dfs[[lvl]] <- merge(
-          dfs[[lvl]] %>% 
-            select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[1]-1)))),
-          df_current[[lvl]] %>%
-            select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[length(years)])))),
-          by = mergecol, 
-          all.x = TRUE,
-          all.y = TRUE
-          )
-        dfs[[lvl]] <- dfs[[lvl]] %>% select(!matches(paste0(".*_", year-1)))
-      }  
+  if (length(years) > 1) {
+    for (year in years[2:length(years)]) {
+      # fetch yearly changes
+      df_current <- process_gvchange(year)
+      # merge years by level
+      for (lvl in lvls) {
+          mergecol <- paste0(lvl, "_ars_", year-1)
+          # merge
+          dfs[[lvl]] <- merge(
+            dfs[[lvl]] %>% 
+              select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[1]-1)))),
+            df_current[[lvl]] %>%
+              select(matches(paste0(mergecol, "|.*_w_.*|", paste0(".*_", years[length(years)])))),
+            by = mergecol, 
+            all.x = TRUE,
+            all.y = TRUE
+            )
+          dfs[[lvl]] <- dfs[[lvl]] %>% select(!matches(paste0(".*_", year-1)))
+        }  
+      }
     }
-
   # calculate weights over years; subset and order
   for (lvl in lvls) {  
     for (w in c("area_w_abs", "area_w_rel", "pop_w_abs", "pop_w_rel")) {
-      dfs[[lvl]][[w]] <- apply(dfs[[lvl]] %>% select(matches(paste0(w, "_.*"))), 1, function(x) { round(prod(x), 3) })
+      dfs[[lvl]][[w]] <- apply(
+        dfs[[lvl]] %>% select(matches(paste0(w, "_.*"))), 
+        1, 
+        function(x) { round(prod(x), 3) }
+        )
     }
     dfs[[lvl]] <- dfs[[lvl]] %>% 
       select(!matches(paste(".*_w_.*_\\d+"))) %>%
       select(matches(paste0(years[1] - 1)), matches("_w_"), matches(paste0(years[length(years)])))
   }
 
-  # return
-  return(dfs)
+  # write
+  lapply(
+    names(dfs), 
+    function(lvl) {
+      write_delim(
+        dfs[[lvl]],
+        paste0(
+          data, "/external/processed/ars/xwalk_", 
+          lvl, "_", years[1]-1, "_", years[length(years)], ".csv"
+          ), 
+        delim = ";"
+        )
+      TRUE
+      }
+    )
+
+    # return
+    return(dfs)
 
   }
 
 # run
+# CHANGES over given years:
+# changes for 2022 occur between 31.12.2021 and 31.12.2022 => xwalk 2021 data -> 2022 data
 dfs <- merge_gvchange(2021:2022, c("gem", "gvb", "kre"))
-# write
-lapply(
-  names(dfs), 
-  function(lvl) {
-    write_delim(
-      dfs[[lvl]],
-      paste0(data, "/external/processed/ars/xwalk_", lvl, "_2020_2022.csv"), 
-      delim = ";"
-      )
-    TRUE
-    }
-  )
+dfs <- merge_gvchange(2022, c("gem", "gvb", "kre"))

@@ -66,7 +66,7 @@ pop_w_abs <- names[str_detect(names, paste0(pattern, collapse = "|"))]
 
 # generate indicator denoting which weight is appropriate
 df_vars <- df_vars %>%
-  mutate(XwalkWeight = case_when(
+  mutate(xwalk_time_weight = case_when(
     Name %in% area_w_abs ~ "area_w_abs",
     Name %in% area_w_rel ~ "area_w_rel",
     Name %in% pop_w_abs ~ "pop_w_abs",
@@ -89,15 +89,16 @@ for (geo in c("gem", "gvb", "kre")) {
   for (w in c("area", "pop")) {
     for (wref in c("abs", "rel")) {
       vars <- df_vars[
-        df_vars$XwalkWeight == paste0(w, "_w_", wref) & df_vars$Raumbezug == toupper(geo), 
-        "SyrGeoName"
+        df_vars$xwalk_time_weight == paste0(w, "_w_", wref) & df_vars$Raumbezug == toupper(geo), 
+        "variable"
         ]
       vars <- vars[!is.na(vars)]
       if (length(vars) > 0) {
-        dfs[[paste0(w, "_w_", wref)]] <- xwalk22(
-          df = df, 
-          geo = geo, 
-          arscol = paste0(geo, "_ars"),
+        dfs[[paste0(w, "_w_", wref)]] <- xwalk(
+          df = df,
+          geo = geo,
+          to = 2022,
+          ars = paste0(geo, "_ars"),
           arsref = 2020, 
           weight = w,
           weightref = wref,
@@ -125,7 +126,7 @@ for (geo in c("gem", "gvb", "kre")) {
     }
 
   # order
-  vars <- df_vars[!is.na(df_vars$XwalkWeight) & df_vars$Raumbezug == toupper(geo), "SyrGeoName"]
+  vars <- df_vars[!is.na(df_vars$xwalk_time_weight) & df_vars$Raumbezug == toupper(geo), "variable"]
   df <- df %>% select(matches(paste0(geo, "_ars")), all_of(vars[!is.na(vars)])) 
 
   # write

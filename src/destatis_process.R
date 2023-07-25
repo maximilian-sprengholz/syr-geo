@@ -167,12 +167,13 @@ for (year in 1998:2022) {
     arsref <- year
   }
   # then to 2022
-  df_year <- xwalk22(
+  df_year <- xwalk(
     df = df_year, 
     geo = "kre", 
-    arscol = "kre_ars",
+    to = 2022,
+    ars = "kre_ars",
     arsref = arsref,
-    yearcol = "year", 
+    years = "year", 
     weight = "pop",
     weightref = "abs",
     variables = vars
@@ -183,8 +184,58 @@ for (year in 1998:2022) {
 
 }
 
+# reshape wide
+vars <- colnames(df)[str_detect(colnames(df), "auslaender")]
+df <- df %>% pivot_wider(
+  names_from = year, 
+  values_from = all_of(vars)
+)
+
 # save
 write_delim(df, paste0(data, "/external/processed/Destatis/kre.csv"), delim = ";")
+
+
+### save to variable index
+
+# build data
+desc <- c(
+  "ohne deutsche Staatsangehörigkeit",
+  "ohne deutsche, mit Staatsangehörigkeit eines mehrh. muslimischen Herkunftslandes (wichtigste)",
+  "ohne deutsche Staatsangehörigkeit; mit muslimischer Religionsangehörigkeit"
+)
+vars <- colnames(df)[str_detect(colnames(df), "auslaender")]
+gender <- c("Personen", "Männer", "Frauen")
+varindex <- tibble(
+  variable = vars,
+  desc = rep(
+    paste("Anzahl", c(paste(gender, desc[1]), paste(gender, desc[2]), paste(gender, desc[3]) )), 
+    each = length(vars)/9
+    ),
+  desc_detail = NA
+)
+varindex[str_detect(varindex$variable, "_staat"), "desc_detail"] <- paste(
+  "Nach Pfündel et al. (2021):",
+  paste(muslimshare$nat[!muslimshare$nat %in% c("Iran", "Irak")], collapse = ", ")
+)
+varindex[str_detect(varindex$variable, "_est"), "desc_detail"] <- paste(
+  "Schätzung basiert auf dem in Pfündel et al. (2021) ausgewiesenen Anteil an Muslim*innen an",
+  "Personen mit Migrationshintergrund (in Deutschland) aus bestimmten Herkunftsländern (hier mit",
+  "Staatsangehörigkeit gleichgesetzt; inkl. Iran/Irak):", paste(muslimshare$nat, collapse = ", ")
+  )
+varindex$geo <- "kre"
+varindex$year <- as.numeric(str_extract(varindex$variable, "\\d+"))
+varindex$month <- 12
+varindex$source <- "Destatis"
+varindex$source_detail <- "Ausländerstatistik"
+
+# append or new file
+file <- paste0(data, "/external/processed/Destatis/variable_index.csv")
+if (file.exists(file)) {
+  varindex_old <- read_delim(file, delim = ";")
+  varindex <- bind_rows(varindex, varindex_old)
+  varindex <- varindex %>% distinct(variable, .keep_all = TRUE)
+}
+write_delim(varindex, file, delim = ";", na = "")
 
 # Table notes:
 # 06611 Kassel, kreisfreie Stadt,

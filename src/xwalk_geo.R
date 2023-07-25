@@ -1,5 +1,5 @@
 #
-# This file performs geo crosswalks:
+# This file creates correspondence tables for geo crosswalks:
 # - between different geo units for 2022
 #
 
@@ -133,18 +133,20 @@ for (geo_out in names(geo_map$geos_out)) {
     # label and order
     if (geo_out == "wohngebiet") idcols <- groupcols else idcols <- geo_out
     colnames(p) <- c(
-      paste0(geo_in, "_ars"), paste0(geo_in, "_area"), idcols, paste0(geo_out, "_area"),
+      paste0(geo_in, "_ars_2022"), paste0(geo_in, "_area"), idcols, paste0(geo_out, "_area"),
       "area_shared", "area_w_abs", "area_w_rel"
       )
     p <- p %>% 
-      select(all_of(c(paste0(geo_in, "_ars"), "area_w_abs", "area_w_rel", idcols))) %>%
-      arrange(across(all_of(c(idcols, paste0(geo_in, "_ars")))))
+      select(all_of(c(paste0(geo_in, "_ars_2022"), "area_w_abs", "area_w_rel", idcols))) %>%
+      arrange(across(all_of(c(idcols, paste0(geo_in, "_ars_2022")))))
 
     # GEM specific
-    if (geos_in == "gem") {
+    if (geo_in == "gem") {
       p <- p %>% 
-        rename(gem_ars_full = gem_ars) %>% 
-        mutate(gem_ars = paste0(substr(gem_ars_full,1,5), substr(gem_ars_full,10,12)))
+        rename(gem_ars_full_2022 = gem_ars_2022) %>% 
+        mutate(gem_ars_2022 = paste0(
+          substr(gem_ars_full_2022, 1, 5), substr(gem_ars_full_2022, 10, 12)
+          ))
       }
 
     # write
@@ -156,21 +158,3 @@ for (geo_out in names(geo_map$geos_out)) {
 
     }
   }
-
-
-### merge plz (info from 31.12.2021, accessed Feb 28, 2023; last updated Feb 2022)
-# https://downloads.suche-postleitzahl.org/v2/public/zuordnung_plz_ort.csv
-# df_ags_plz <- read_csv(paste0(data, "/external/raw/OSM/zuordnung_plz_ort.csv"))
-# dfs_gv <- lapply(dfs_gv, function(df_gv, df_ags_plz) {
-#     # create ags for merging (=ars without gemeindevarband code in between)
-#     if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars_2022 = gem_ars)
-#     df_gv <- df_gv %>% mutate(ags = paste0(substr(gem_ars_2022,1,5), substr(gem_ars_2022,10,12)))
-#     # merge
-#     df_gv <- merge(df_gv, df_ags_plz %>% select(ags, plz), by="ags", all.x = TRUE, all.y = FALSE)
-#     # rename again
-#     if (df_gv$year[1] == 2022) df_gv <- rename(df_gv, gem_ars = gem_ars_2022)
-#     # drop ags
-#     df_gv <- df_gv %>% select(-c(ags))
-#     },
-#     df_ags_plz
-#   )

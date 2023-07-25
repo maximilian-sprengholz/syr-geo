@@ -73,14 +73,20 @@ quietly <- pbsapply(
     }
   )   
 df_vars <- bind_cols(df_vars, df_vars_metadata)
-df_vars <- df_vars %>% distinct(KurznamePlus, .keep_all = TRUE) # omit SDG doublettes (not perfect)
-df_vars$SyrGeoName <- tolower(gsub("\\s", "_", df_vars$Kurzname))
-df_vars$FetchStatus <- 0
-df_vars$JahrMax <- NA
-df_vars$JahrMin <- NA
-df_vars$JahrModus <- NA
+df_vars$variable <- tolower(gsub("\\s", "_", df_vars$Kurzname))
+# there are doublettes in the data: exact (esp. with SDG stuff), typos, different geo levels
+# rough cleaning; Kurzname is identical to KurznamePlus (why?)
+df_vars <- df_vars %>%
+  arrange(variable, Raumbezug) %>% 
+  distinct(variable, .keep_all = TRUE) %>% # GEM, GVB, KRE order alphabetical -> keeps smallest geo
+  arrange(IndikatorID) 
+df_vars$fetched <- 0
+df_vars$year <- 2020
+df_vars$year_max <- NA
+df_vars$year_min <- NA
+df_vars$year_modus <- NA
 df_vars <- df_vars %>% 
-  select(IndikatorID, KurznamePlus, Raumbezug, JahrMax, JahrMin, JahrModus, colnames(.))
+  select(variable, Name, Raumbezug, year, year_max, year_min, year_modus, colnames(.))
 write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
 
 
@@ -101,9 +107,9 @@ for (geo in geos) {
     arscol <- paste0(tolower(geo), "_ars")
     namecol <- paste0(tolower(geo), "_name")
     popcol <- paste0(tolower(geo), "_pop")
-    if (file.exists(paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"))) {
+    if (file.exists(paste0(data, "/external/raw/INKAR/", tolower(geo), ".csv"))) {
       df <- read_delim(
-        paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), 
+        paste0(data, "/external/raw/INKAR/", tolower(geo), ".csv"), 
         delim = ";"
         )
     } else {
@@ -116,8 +122,8 @@ for (geo in geos) {
     }
     populated <- unlist(df[df[[popcol]] != 0, arscol]) # weird year values for non-populated areas
     # get data (list of dfs is returned)
-    df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, "FetchStatus"] <- unlist(pbapply(
-      df_vars[df_vars$Raumbezug == geo & df_vars$FetchStatus != 1, ],
+    df_vars[df_vars$Raumbezug == geo & df_vars$fetched != 1, "fetched"] <- unlist(pbapply(
+      df_vars[df_vars$Raumbezug == geo & df_vars$fetched != 1, ],
       1, 
       function(row, arscol) {
         tryCatch({
@@ -133,12 +139,12 @@ for (geo in geos) {
           years <- unlist(returns[returns[["Schlüssel"]] %in% populated, "Zeit"])
           uyears <- unique(years)
           uyears <- uyears[!is.na(uyears)]
-          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "JahrMax"] <<- max(uyears)
-          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "JahrMin"] <<- min(uyears)
+          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "year_max"] <<- max(uyears)
+          df_vars[df_vars$IndikatorID == row[["IndikatorID"]], "year_min"] <<- min(uyears)
           df_vars[df_vars$IndikatorID == row[["IndikatorID"]], 
-            "JahrModus"] <<- uyears[which.max(tabulate(match(years, uyears)))]
+            "year_modus"] <<- uyears[which.max(tabulate(match(years, uyears)))]
           # use consistent column names and indicator name derived from Kurzname
-          name <- row[["SyrGeoName"]]
+          name <- row[["variable"]]
           colnames(returns) <- c(arscol, name, paste0(name, "_year"))
           # merge
           df <<- merge(df, returns, by = arscol, all.x = TRUE, all.y = FALSE)

@@ -39,60 +39,80 @@ if (user == "max") {
 
 ### functions
 
-# crosswalk by time 
-# 2020 -> 2022 or 2021 -> 2022
-# for 1998 - 2019 -> 2020 use the `ags` package
-xwalk22 <- function(
+# Crosswalk by
+# - time within geo: 2020 / 2021 -> 2022 (for 1998 - 2019 -> 2020 use the `ags` package)
+# - by geo for 2022: gem / gvb / kre -> postcode / wohngebiet
+# Does a single conversion per call, returns the converted df
+
+xwalk <- function(
     df,
-    geo,
-    arscol,
-    arsref,
-    yearcol = NA,
-    weight,
-    weightref,
-    variables
+    geo, # gem; gvb; kre
+    to, # 2022; postcode; wohngebiet
+    ars, # column with ars
+    arsref = NA, # 2020; 2021; 2022 - only relevant if to == 2022
+    years = NA, # only relevant if long data by year WITH THE SAME ARSREF
+    weight, # area; pop
+    weightref, # abs; rel
+    variables # vector of column names
     ) {
 
-  # new ars (check if full ars = 12 digits or ags for gem) and name
-  arsnew <- paste0(geo, "_ars_", ifelse(nchar(df[1, arscol]) == 12, "full_", ""), 2022)
-  namenew <- paste0(geo, "_name_2022")
-  # either xwalk or (if arsref = 2022) merge names and set reference
-  if (arsref != 2022) {    
+  # new geo id: ars; postcode; pid x response_multisub_rank
+  # set aggregation groups
+  if (as.numeric(to) == 2022) {
+    # by time
+    geonew <- paste0(geo, "_ars_", ifelse(nchar(df[1, ars]) == 12, "full_", ""), 2022) # ars vs. ags
+    namenew <- paste0(geo, "_name_2022")
+    ctable <- paste0(data, "/external/processed/ars/xwalk_", tolower(geo), "_")
+    ctable <- paste0(ctable, ifelse(as.numeric(arsref) == 2022, 2021, arsref), "_2022.csv")
+    groups <- c(geonew, namenew)
+  } else {
+    # by geo for 2022
+    arsref <- 2022
+    if (weight == "pop") print("Weighting by pop not possible. Weighting by area instead.")
+    weight <- "area" # only area weights possible
+    if (to == "wohngebiet") geonew <- c("pid", "response_multisub_rank") else geonew <- "postcode"
+    ctable <- paste0(data, "/external/processed/ars/xwalk_", tolower(geo), "_", to, ".csv")
+    groups <- geonew
+  }
+  if (!is.na(years)) groups <- c(groups, years)
+
+  # 2022 to 2022: no xwalk but merge info to have same output when looping over years including 2022
+  if (as.numeric(arsref) == 2022 & as.numeric(to) == 2022) {
+    # just merge ars info
+    df_xwalk <- read_delim(ctable, delim = ";", show_col_types = FALSE)
+    df_xwalk <- df_xwalk %>% distinct(!!sym(geonew), !!sym(namenew))
+    df <- merge(df, df_xwalk, by.x = ars, by.y = geonew, all.x = TRUE)
+    df <- df %>% rename(!!sym(geonew) := !!sym(ars))
+  } else {
+    ### xwalk 
     # read correspondence table
-    df_xwalk <- read_delim(
-      paste0(data, "/external/processed/ars/xwalk_", tolower(geo), "_", arsref, "_2022.csv"),
-      delim = ";",
-      show_col_types = FALSE
-      )
+    df_xwalk <- read_delim(ctable, delim = ";", show_col_types = FALSE)
     # merge to passed df
-    df <- merge(df, df_xwalk, by.x = arscol, by.y = paste0(geo, "_ars_", arsref), all.x = TRUE)
-    # grouping
-    if (!is.na(yearcol)) groups <- c(arsnew, namenew, yearcol) else groups <- c(arsnew, namenew)
+    df <- merge(df, df_xwalk, by.x = ars, by.y = paste0(geo, "_ars_", arsref), all.x = TRUE)
     # weight data
     w <- paste0(weight, "_w_", weightref)
     df <- df %>%
       mutate(across(where(is.numeric) & any_of(variables), ~ .x * .data[[w]])) %>%
       group_by_at(groups) %>%
-      summarize(across(where(is.numeric) & any_of(variables), ~ sum(.x, na.rm = TRUE))) %>%
-      rename(!!sym(arscol) := !!sym(arsnew))
+      summarize(across(where(is.numeric) & any_of(variables), ~ sum(.x, na.rm = TRUE)))
     if (weightref == "abs") {
       df <- df %>% mutate(across(where(is.numeric) & any_of(variables), ~ round(.x))) # round to int
       }
-  } else {
-    # just merge ars info
-    df_xwalk <- read_delim(
-      paste0(data, "/external/processed/ars/xwalk_", tolower(geo), "_2021_2022.csv"),
-      delim = ";",
-      show_col_types = FALSE
-      )
-    df_xwalk <- df_xwalk %>% distinct(!!sym(arsnew), !!sym(namenew))
-    df <- merge(df, df_xwalk, by.x = arscol, by.y = arsnew, all.x = TRUE)
-  }
+    }
+  
   # rename, set ars ref, order columns
-  df <- df %>%
-    rename(!!sym(paste0(arscol, "_name")) := !!sym(namenew)) %>%
-    mutate(!!sym(paste0(arscol, "_ref")) := 2022) %>%
-    select(any_of(groups), colnames(.))
+  if (as.numeric(to) == 2022) {
+    df <- df %>%
+      mutate(!!sym(paste0(ars, "_ref")) := 2022) %>%
+      select(any_of(c(geonew, paste0(ars, "_ref"), namenew, years)), colnames(.)) %>%
+      rename(
+        !!sym(ars) := !!sym(geonew),
+        !!sym(paste0(ars, "_name")) := !!sym(namenew)
+        )
+  } else {
+    df <- df %>% select(all_of(groups), colnames(.))
+  }
+
   # return
   return(df)
 }

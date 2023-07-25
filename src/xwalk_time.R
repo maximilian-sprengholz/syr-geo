@@ -1,5 +1,5 @@
 #
-# This file performs geo crosswalks:
+# This file creates correspondence tables for geo crosswalks:
 # - over time for the same units
 #
 

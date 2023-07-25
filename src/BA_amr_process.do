@@ -197,16 +197,18 @@ foreach var in `vars' {
 clear
 set obs `nvars'
 gen str variable = ""
-gen str label = ""
+gen str desc = ""
 forvalues i = 1/`nvars' {
     local var : word `i' of `vars'
     local label : word `i' of `labels'
     replace variable = "`var'" if _n == `i'
-    replace label = "`label'" if _n == `i'
+    replace desc = "`label'" if _n == `i'
 }
 gen str geo = "kre"
 gen year = 2022
-gen str source = "Arbeitsmarktreport"
+gen month = 11
+gen str source = "BA"
+gen str source_detail = "Arbeitsmarktreport"
 tempfile varindex
 save `varindex'
 local file "$data/external/processed/BA/variable_index.csv"
@@ -226,7 +228,7 @@ local file "$data/external/processed/BA/kre.csv"
 capture confirm file `file'
 if (!_rc) {
     import delimited using `file', clear delimiter(";") stringcols(1)
-    merge 1:1 kre_ars using `kreise', nogen
+    merge 1:1 kre_ars using `kreise', nogen update replace
 }
 else {
     use `kreise', clear

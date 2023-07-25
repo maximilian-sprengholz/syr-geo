@@ -83,7 +83,7 @@ for (geo in c("gem", "gvb", "kre")) {
   # read
   df <- read_delim(paste0(data, "/external/raw/INKAR/", tolower(geo), ".csv"), delim = ";")
   df <- df %>% select(!matches(paste0(geo, "_pop|", ".*_year"))) # detailed year info in `raw`
-
+  
   # weight
   dfs <- list()
   for (w in c("area", "pop")) {
@@ -106,8 +106,8 @@ for (geo in c("gem", "gvb", "kre")) {
           )
         }
       }
-    }
-
+    } 
+  
   # merge
   df <- dfs[[1]]
   if (length(dfs) > 1) {

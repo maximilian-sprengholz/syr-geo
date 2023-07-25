@@ -44,6 +44,10 @@ if (user == "max") {
 # - by geo for 2022: gem / gvb / kre -> postcode / wohngebiet
 # Does a single conversion per call, returns the converted df
 
+#
+# Allow to do it in one step? Or: just allow to fetch data from what is available?
+# 
+
 xwalk <- function(
     df,
     geo, # gem; gvb; kre
@@ -104,7 +108,7 @@ xwalk <- function(
   if (as.numeric(to) == 2022) {
     df <- df %>%
       mutate(!!sym(paste0(ars, "_ref")) := 2022) %>%
-      select(any_of(c(geonew, paste0(ars, "_ref"), namenew, years)), colnames(.)) %>%
+      select(any_of(c(geonew, paste0(ars, "_ref"), groups[!groups %in% geonew])), colnames(.)) %>%
       rename(
         !!sym(ars) := !!sym(geonew),
         !!sym(paste0(ars, "_name")) := !!sym(namenew)

@@ -132,4 +132,11 @@ for (geo in c("gem", "gvb", "kre")) {
   # write
   write_delim(df, paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), delim = ";")
 
-}
+  }
+
+# update variable index so that non-crosswalkable variables are omitted
+write_delim(
+  df_vars %>% filter(!is.na(xwalk_time_weight)), 
+  paste0(data, "/external/processed/INKAR/variable_index.csv"), 
+  delim = ";"
+  )

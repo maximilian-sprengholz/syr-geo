@@ -20,7 +20,7 @@ library(tidyr)
 
 df <- NULL
 columns <- c("variable", "desc", "geo", "year", "month", "source", "source_detail")
-for (source in c("BA", "Destatis", "INKAR")) {
+for (source in c("Google", "BA", "Destatis", "INKAR")) {
   # read
   varindex <- read_delim(
     paste0(data, "/external/processed/", source, "/variable_index.csv"), 

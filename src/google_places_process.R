@@ -35,6 +35,9 @@ library(tidyterra)
 # timing start
 tic()
 
+# postcode shapefile to determine postcode from Google Places geo
+p <- vect(paste0(data, "/external/raw/Shapefiles/plz/plz-5stellig.shp"))
+
 ### mosques
 
 x <- "mosques"
@@ -90,7 +93,6 @@ df_google <- df_google %>%
 df_google <- sf::st_as_sf(df_google, coords = c("lon", "lat"), crs = st_crs(4326))
 
 # get postcode; drop those without postcode match (= non-German territory)
-p <- vect(paste0(data, "/external/raw/Shapefiles/plz/plz-5stellig.shp"))
 df_google$postcode <- pbsapply(
   df_google$geometry,
   function(x, p) {
@@ -162,6 +164,17 @@ df_google$lon <- df_google$geometry$location$lng
 df_google$lat <- df_google$geometry$location$lat
 df_google <- df_google %>% select(-c(geometry))
 
+# get postcode; drop those without postcode match (= non-German territory)
+# in many cases a postcode exists, but not always
+df_google$postcode <- pbsapply(
+  df_google$geometry,
+  function(x, p) {
+    mask <- relate(vect(x), p, "intersects")
+    p$plz[mask][1]
+  },
+  p)
+df_google <- df_google %>% filter(!is.na(postcode))
+
 # create dataset for manual cleaning; mark duplicates by address and rough lon lat
 df_google <- df_google %>%
   mutate(lon_round = sprintf("%.1f", lon)) %>%
@@ -184,18 +197,6 @@ write_delim(
 
 # create spatvector
 df_google <- sf::st_as_sf(df_google, coords = c("lon", "lat"), crs = st_crs(4326))
-
-# # import manually cleaned dataset: XX
-# df_manualcheck <- read_delim(
-#   paste0(data, "/external/processed/Google/", x, "_manualcheck_XX.csv"),
-#   delim = ";"
-#   )
-# df_google <- merge(
-#     df_google, 
-#     df_mosques_manualcheck %>% select(place_id, drop), 
-#     by = "place_id", all.x = TRUE, all.y = FALSE
-#     )
-# df_google <- df_google %>% filter(is.na(drop)) %>% select(!c(drop))
 
 # # import manually cleaned dataset: XX
 # df_manualcheck <- read_delim(
@@ -243,6 +244,17 @@ df_google$lon <- df_google$geometry$location$lng
 df_google$lat <- df_google$geometry$location$lat
 df_google <- df_google %>% select(-c(geometry))
 
+# get postcode; drop those without postcode match (= non-German territory)
+# in many cases a postcode exists, but not always
+df_google$postcode <- pbsapply(
+  df_google$geometry,
+  function(x, p) {
+    mask <- relate(vect(x), p, "intersects")
+    p$plz[mask][1]
+  },
+  p)
+df_google <- df_google %>% filter(!is.na(postcode))
+
 # create dataset for manual cleaning; mark duplicates by address and rough lon lat
 df_google <- df_google %>%
   mutate(lon_round = sprintf("%.1f", lon)) %>%
@@ -274,18 +286,6 @@ df_google <- sf::st_as_sf(df_google, coords = c("lon", "lat"), crs = st_crs(4326
 #   )
 # df_google <- merge(
 #     df_google, 
-#     df_mosques_manualcheck %>% select(place_id, drop), 
-#     by = "place_id", all.x = TRUE, all.y = FALSE
-#     )
-# df_google <- df_google %>% filter(is.na(drop)) %>% select(!c(drop))
-
-# # import manually cleaned dataset: XX
-# df_manualcheck <- read_delim(
-#   paste0(data, "/external/processed/Google/", x, "_manualcheck_XX.csv"),
-#   delim = ";"
-#   )
-# df_google <- merge(
-#     df_google, 
 #     df_manualcheck %>% select(place_id, drop), 
 #     by = "place_id", all.x = TRUE, all.y = FALSE
 #     )
@@ -296,6 +296,84 @@ saveRDS(df_google, file = paste0(data, "/external/processed/Google/", x, ".rds")
 
 # timing end
 toc()
+
+
+### aggregate on wohngebiet / postcode level #######################################################
+
+# target geometries
+p_wohngebiet <- vect(readRDS(file = paste0(data, "/syr_wohngebiet.rds")))
+p_postcode <- vect(paste0(data, "/external/raw/Shapefiles/plz/plz-5stellig.shp"))
+p_postcode <- p_postcode %>% rename(postcode = plz)
+
+# loop input: establishments and output geos
+vars <- list(
+  supermarkets = "turkish_arabic_supermarkets",
+  restaurants = "turkish_arabic_restaurants",
+  mosques = "mosques"
+  )
+geos <- list(
+  postcode = p_postcode,
+  wohngebiet = p_wohngebiet
+  )
+
+# loop
+dfs <- NULL
+for (geo in names(geos)) {
+  # get geo base
+  p_out <- geos[[geo]]
+  if (geo == "postcode") groups <- names(p_out)[1] else groups <- names(p_out)[1:2]
+  p_out <- p_out %>% select(all_of(groups))
+  dfs[[geo]] <- p_out %>% as.data.frame()
+  # aggregate and merge google places data
+  for (place in names(vars)) {
+    v <- vars[[place]]
+    p_google <- vect(readRDS(paste0(data, "/external/processed/Google/", place, ".rds")))
+    p_is <- intersect(p_out, p_google %>% select(place_id))
+    p_is <- p_is %>% 
+      as.data.frame() %>%
+      add_count(pick(all_of(groups)), name = v) %>%
+      distinct(pick(all_of(groups)), !!sym(v))
+    dfs[[geo]] <- merge(dfs[[geo]], p_is, by = groups, all.x = TRUE, all.y = FALSE)
+    }
+  # replace missings with 0
+  dfs[[geo]] <- dfs[[geo]] %>% mutate(across(!any_of(groups), ~ ifelse(is.na(.x), 0, .x))) 
+}
+
+# write
+sapply(
+  names(dfs), 
+  function(df) {
+    write_delim(dfs[[df]], paste0(data, "/external/processed/Google/", df, ".csv"), delim = ";")
+    TRUE
+    }
+  )
+
+### save to variable index
+
+# build data
+desc <- c(
+  "Anzahl türkische/arabische Supermärkte",
+  "Anzahl türkische/arabische Restaurants",
+  "Anzahl Moscheen"
+)
+varindex <- tibble(
+  variable = rep(unlist(vars), each = 2),
+  desc = rep(desc, each = 2),
+  geo = rep(c("postcode", "wohngebiet"), 3)
+)
+varindex$year <- 2023
+varindex$month <- 03
+varindex$source <- "Google"
+varindex$source_detail <- "Places API"
+varindex
+
+# write
+write_delim(
+  varindex, 
+  paste0(data, "/external/processed/Google/variable_index.csv"), 
+  delim = ";", 
+  na = ""
+  )
 
 ### compare to data from jonas? ####################################################################
 

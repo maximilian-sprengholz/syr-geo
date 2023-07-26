@@ -73,20 +73,44 @@ quietly <- pbsapply(
     }
   )   
 df_vars <- bind_cols(df_vars, df_vars_metadata)
-df_vars$variable <- tolower(gsub("\\s", "_", df_vars$Kurzname))
-# there are doublettes in the data: exact (esp. with SDG stuff), typos, different geo levels
-# rough cleaning; Kurzname is identical to KurznamePlus (why?)
+
+# rough doublette cleaning: exact (esp. with SDG stuff), typos, different geo levels
 df_vars <- df_vars %>%
-  arrange(variable, Raumbezug) %>% 
-  distinct(variable, .keep_all = TRUE) %>% # GEM, GVB, KRE order alphabetical -> keeps smallest geo
-  arrange(IndikatorID) 
+  arrange(Kurzname, Raumbezug) %>% 
+  distinct(Kurzname, .keep_all = TRUE) %>% # GEM, GVB, KRE order alphabetical -> keeps smallest geo
+  arrange(Name, Raumbezug) %>%
+  distinct(Name, .keep_all = TRUE) %>%
+  arrange(as.numeric(ID))
+# create new variable names from "Bereich" and "ID" (whatever kind of ID that is...)
+df_vars <- df_vars %>%
+  mutate(bereich_short = tolower(case_when(
+    Bereich == "Bauen und Wohnen" ~ "Bauen",
+    Bereich == "Beschäftigung und Erwerbstätigkeit" ~ "Beschäftigung",
+    Bereich == "Privateinkommen, Private Schulden" ~ "Einkommen",
+    Bereich == "Flächennutzung und Umwelt" ~ "Umwelt",
+    Bereich == "Medizinische und soziale Versorgung" ~ "Med Soz Versorgung",
+    Bereich == "Öffentliche Finanzen" ~ "Öff Finanzen",
+    Bereich == "Raumwirksame Mittel" ~ "Raumw Mittel",
+    Bereich == "Verkehr und Erreichbarkeit" ~ "Verkehr",
+    Bereich == "Zentrale Orte Monitoring" ~ "Orte Monitoring",
+    Bereich == "SDG-Indikatoren für Kommunen" ~ "SDG",
+    .default = Bereich
+  )))
+rep <- list(c("ä", "ae"), c("ö", "oe"), c("ü", "ue"), c("\\s", "_"))
+for (r in rep) { df_vars$bereich_short <- gsub(r[1], r[2], df_vars$bereich_short) }
+df_vars$variable <- paste(df_vars$bereich_short, df_vars$ID, sep = "_")
+
+# other log stuff
 df_vars$fetched <- 0
 df_vars$year <- 2020
 df_vars$year_max <- NA
 df_vars$year_min <- NA
 df_vars$year_modus <- NA
-df_vars <- df_vars %>% 
+# order
+df_vars <- df_vars %>%
+  select(!c(bereich_short)) %>%
   select(variable, Name, Raumbezug, year, year_max, year_min, year_modus, colnames(.))
+# write
 write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
 
 

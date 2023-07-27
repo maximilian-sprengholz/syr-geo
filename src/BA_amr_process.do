@@ -209,6 +209,8 @@ gen year = 2022
 gen month = 11
 gen str source = "BA"
 gen str source_detail = "Arbeitsmarktreport"
+gen str xwalk_geo_weight = "area_w_abs"
+replace xwalk_geo_weight = "area_w_rel" if regexm(variable, "^arbeitslosenquote.*")
 tempfile varindex
 save `varindex'
 local file "$data/external/processed/BA/variable_index.csv"

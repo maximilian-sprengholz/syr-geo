@@ -59,15 +59,19 @@ xwalk <- function(
     weightref, # abs; rel
     variables # vector of column names
     ) {
+  
+  # numeric checks
+  if (!is.na(as.numeric(to))) to <- as.numeric(to)
+  if (!is.na(as.numeric(arsref))) arsref <- as.numeric(arsref)
 
   # new geo id: ars; postcode; pid x response_multisub_rank
   # set aggregation groups
-  if (as.numeric(to) == 2022) {
+  if (to == 2022) {
     # by time
     geonew <- paste0(geo, "_ars_", ifelse(nchar(df[1, ars]) == 12, "full_", ""), 2022) # ars vs. ags
     namenew <- paste0(geo, "_name_2022")
     ctable <- paste0(data, "/external/processed/ars/xwalk_", tolower(geo), "_")
-    ctable <- paste0(ctable, ifelse(as.numeric(arsref) == 2022, 2021, arsref), "_2022.csv")
+    ctable <- paste0(ctable, ifelse(arsref == 2022, 2021, arsref), "_2022.csv")
     groups <- c(geonew, namenew)
   } else {
     # by geo for 2022
@@ -81,7 +85,7 @@ xwalk <- function(
   if (!is.na(years)) groups <- c(groups, years)
 
   # 2022 to 2022: no xwalk but merge info to have same output when looping over years including 2022
-  if (as.numeric(arsref) == 2022 & as.numeric(to) == 2022) {
+  if (arsref == 2022 & to == 2022) {
     # just merge ars info
     df_xwalk <- read_delim(ctable, delim = ";", show_col_types = FALSE)
     df_xwalk <- df_xwalk %>% distinct(!!sym(geonew), !!sym(namenew))
@@ -93,19 +97,16 @@ xwalk <- function(
     df_xwalk <- read_delim(ctable, delim = ";", show_col_types = FALSE)
     # merge to passed df
     df <- merge(df, df_xwalk, by.x = ars, by.y = paste0(geo, "_ars_", arsref), all.x = TRUE)
-    # weight data
+    # weight data; rounded values show imprecision!
     w <- paste0(weight, "_w_", weightref)
     df <- df %>%
       mutate(across(where(is.numeric) & any_of(variables), ~ .x * .data[[w]])) %>%
-      group_by_at(groups) %>%
-      summarize(across(where(is.numeric) & any_of(variables), ~ sum(.x, na.rm = TRUE)))
-    if (weightref == "abs") {
-      df <- df %>% mutate(across(where(is.numeric) & any_of(variables), ~ round(.x))) # round to int
-      }
+      group_by(pick(all_of(groups))) %>%
+      summarize(across(where(is.numeric) & any_of(variables), ~ round(sum(.x, na.rm = TRUE), 3)))
     }
   
   # rename, set ars ref, order columns
-  if (as.numeric(to) == 2022) {
+  if (to == 2022) {
     df <- df %>%
       mutate(!!sym(paste0(ars, "_ref")) := 2022) %>%
       select(any_of(c(geonew, paste0(ars, "_ref"), groups[!groups %in% geonew])), colnames(.)) %>%

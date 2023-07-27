@@ -342,8 +342,8 @@ for (geo in names(geos)) {
 # write
 sapply(
   names(dfs), 
-  function(df) {
-    write_delim(dfs[[df]], paste0(data, "/external/processed/Google/", df, ".csv"), delim = ";")
+  function(geo) {
+    write_delim(dfs[[geo]], paste0(data, "/external/processed/Google/", geo, ".csv"), delim = ";")
     TRUE
     }
   )

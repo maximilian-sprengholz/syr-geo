@@ -227,6 +227,8 @@ varindex$year <- as.numeric(str_extract(varindex$variable, "\\d+"))
 varindex$month <- 12
 varindex$source <- "Destatis"
 varindex$source_detail <- "Ausländerstatistik"
+varindex <- varindex %>% mutate(xwalk_time_weight = ifelse(year < 2022, "pop_w_abs", NA))
+varindex$xwalk_geo_weight <- "area_w_abs"
 
 # append or new file
 file <- paste0(data, "/external/processed/Destatis/variable_index.csv")

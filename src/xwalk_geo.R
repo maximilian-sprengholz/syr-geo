@@ -50,7 +50,6 @@ df_ars <- read_csv(paste0(data, "/external/processed/ars/ars2022.csv"))
 
 ### wohngebiete
 p_wohngebiet <- vect(readRDS(file = paste0(data, "/syr_wohngebiet.rds")))
-#p_wohngebiet <- vect(p_wohngebiet[!st_is_empty(p_wohngebiet), c("pid", "response_multisub_rank")])
 
 ### Shapefiles PLZ (info from 31.12.2021, accessed Feb 28, 2023; last updated Feb 2022)
 # https://downloads.suche-postleitzahl.org/v2/public/plz-5stellig.shp.zip

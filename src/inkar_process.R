@@ -74,9 +74,6 @@ df_vars <- df_vars %>%
     .default = "pop_w_rel"
   ))
 
-# update variable index
-write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
-
 ### xwalk 2020 -> 2022
 for (geo in c("gem", "gvb", "kre")) {
   
@@ -133,6 +130,9 @@ for (geo in c("gem", "gvb", "kre")) {
   write_delim(df, paste0(data, "/external/processed/INKAR/", tolower(geo), ".csv"), delim = ";")
 
   }
+
+# set xwalk weights also for geo (only area weighting is possible)
+df_vars$xwalk_geo_weight <- gsub("pop", "area", df_vars$xwalk_time_weight) # only area weightin
 
 # update variable index so that non-crosswalkable variables are omitted
 write_delim(

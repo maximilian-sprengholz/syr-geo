@@ -351,21 +351,19 @@ sapply(
 ### save to variable index
 
 # build data
-desc <- c(
+varindex <- tibble(
+  variable = unlist(vars),
+  desc = c(
   "Anzahl türkische/arabische Supermärkte",
   "Anzahl türkische/arabische Restaurants",
   "Anzahl Moscheen"
+  ),
 )
-varindex <- tibble(
-  variable = rep(unlist(vars), each = 2),
-  desc = rep(desc, each = 2),
-  geo = rep(c("postcode", "wohngebiet"), 3)
-)
+varindex$geo <- "points"
 varindex$year <- 2023
 varindex$month <- 03
 varindex$source <- "Google"
 varindex$source_detail <- "Places API"
-varindex
 
 # write
 write_delim(

@@ -190,4 +190,8 @@ for (geo in geos) {
   }
 
 # save progress to variable index
-write_delim(df_vars, paste0(data, "/external/processed/INKAR/variable_index.csv"), delim = ";")
+write_delim(
+  df_vars %>% arrange(as.numeric(ID)), 
+  paste0(data, "/external/processed/INKAR/variable_index.csv"), 
+  delim = ";"
+  )

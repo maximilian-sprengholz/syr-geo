@@ -24,7 +24,7 @@ columns <- c(
   "variable", "desc", "geo", "year", "month", "source", "source_detail", "xwalk_time_weight", 
   "xwalk_geo_weight"
   )
-for (source in c("Google", "BA", "Destatis", "INKAR")) {
+for (source in c("Google", "IVW", "BA", "Destatis", "INKAR")) {
   # read
   varindex <- read_delim(
     paste0(data, "/external/processed/", source, "/variable_index.csv"), 
@@ -69,7 +69,7 @@ dfs <- list(
 )
 
 # xwalk and merge inputs
-for (source in c("BA", "Destatis", "INKAR")) {
+for (source in c("IVW", "BA", "Destatis", "INKAR")) {
   geos_in <- unique(unlist(varindex[varindex$source == source, "geo"]))
   for (geo_in in geos_in) {
     # read

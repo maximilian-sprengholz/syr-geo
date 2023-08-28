@@ -146,11 +146,11 @@ df_google <- df_google %>%
 # drop standard discounters / supermarkets
 drop <- c(
   "adix", "aldi", "alnatura", "automat", "combi", "cap", "diska", "e[\\s-]center", "e[\\s-]aktiv", 
-  "edeka", "family frisch", "feneberg", "getr[aeä]*nke[-]*markt", "hit\\smarkt", "inkoop", 
-  "kaufland", "konsum", "lidl", "maga[zs]in", "markant[\\s-]*markt", "marktkauf", "mix\\smarkt", 
-  "nahkauf", "nah\\s&\\sgut", "nah\\sund\\sgut", "nahkauf", "naturmarkt", "natursupermarkt", 
-  "netto", "norma", "np[\\s-]markt", "prima", "rewe", "spar", "tchibo", "tegut", "v-markt", 
-  "v-mini", "weihnacht"
+  "edeka", "famila", "family frisch", "feneberg", "getr[aeä]*nke[-]*markt", "globus", "hit", 
+  "hit\\smarkt", "inkoop", "kaufland", "konsum", "lidl", "maga[zs]in", "markant[\\s-]*markt", 
+  "marktkauf", "mini\\smix", "mix\\smarkt", "nahkauf", "nah\\s&\\sfrisch", "nah\\s&\\sgut", 
+  "nah\\sund\\sgut", "nahkauf", "naturmarkt", "natursupermarkt", "netto", "norma", "np[\\s-]markt",
+  "penny", "prima", "rewe", "spar", "tchibo", "tegut", "v-markt", "v-mini", "xpress", "weihnacht"
   )
 df_google <- df_google %>% 
   filter(
@@ -163,17 +163,6 @@ df_google <- df_google %>%
 df_google$lon <- df_google$geometry$location$lng
 df_google$lat <- df_google$geometry$location$lat
 df_google <- df_google %>% select(-c(geometry))
-
-# get postcode; drop those without postcode match (= non-German territory)
-# in many cases a postcode exists, but not always
-df_google$postcode <- pbsapply(
-  df_google$geometry,
-  function(x, p) {
-    mask <- relate(vect(x), p, "intersects")
-    p$plz[mask][1]
-  },
-  p)
-df_google <- df_google %>% filter(!is.na(postcode))
 
 # create dataset for manual cleaning; mark duplicates by address and rough lon lat
 df_google <- df_google %>%
@@ -198,17 +187,32 @@ write_delim(
 # create spatvector
 df_google <- sf::st_as_sf(df_google, coords = c("lon", "lat"), crs = st_crs(4326))
 
-# # import manually cleaned dataset: XX
-# df_manualcheck <- read_delim(
-#   paste0(data, "/external/processed/Google/", x, "_manualcheck_XX.csv"),
-#   delim = ";"
-#   )
-# df_google <- merge(
-#     df_google, 
-#     df_manualcheck %>% select(place_id, drop), 
-#     by = "place_id", all.x = TRUE, all.y = FALSE
-#     )
-# df_google <- df_google %>% filter(is.na(drop)) %>% select(!c(drop))
+# get postcode; drop those without postcode match (= non-German territory)
+# in many cases a postcode exists, but not always
+df_google$postcode <- pbsapply(
+  df_google$geometry,
+  function(x, p) {
+    mask <- relate(vect(x), p, "intersects")
+    p$plz[mask][1]
+  },
+  p)
+df_google <- df_google %>% filter(!is.na(postcode))
+
+# import manually checked datasets, drop results which do not make sense
+for (sfx in c("jw", "cmg")) {
+  df_manualcheck <- read_delim(
+    paste0(data, "/external/processed/Google/", x, "_manualcheck_", sfx, ".csv"),
+    delim = ";"
+    )
+  df_google <- merge(
+      df_google, 
+      df_manualcheck %>% select(place_id, drop, drop2), 
+      by = "place_id", all.x = TRUE, all.y = FALSE
+      )
+  df_google <- df_google %>% 
+    filter(is.na(drop) | (drop == 9 & is.na(drop2))) %>% 
+    select(!c(drop, drop2))
+  }
 
 # write cleaned dataset
 saveRDS(df_google, file = paste0(data, "/external/processed/Google/", x, ".rds"))
@@ -244,17 +248,6 @@ df_google$lon <- df_google$geometry$location$lng
 df_google$lat <- df_google$geometry$location$lat
 df_google <- df_google %>% select(-c(geometry))
 
-# get postcode; drop those without postcode match (= non-German territory)
-# in many cases a postcode exists, but not always
-df_google$postcode <- pbsapply(
-  df_google$geometry,
-  function(x, p) {
-    mask <- relate(vect(x), p, "intersects")
-    p$plz[mask][1]
-  },
-  p)
-df_google <- df_google %>% filter(!is.na(postcode))
-
 # create dataset for manual cleaning; mark duplicates by address and rough lon lat
 df_google <- df_google %>%
   mutate(lon_round = sprintf("%.1f", lon)) %>%
@@ -279,17 +272,32 @@ write_delim(
 # create spatvector
 df_google <- sf::st_as_sf(df_google, coords = c("lon", "lat"), crs = st_crs(4326))
 
-# # import manually cleaned dataset: XX
-# df_manualcheck <- read_delim(
-#   paste0(data, "/external/processed/Google/", x, "_manualcheck_XX.csv"),
-#   delim = ";"
-#   )
-# df_google <- merge(
-#     df_google, 
-#     df_manualcheck %>% select(place_id, drop), 
-#     by = "place_id", all.x = TRUE, all.y = FALSE
-#     )
-# df_google <- df_google %>% filter(is.na(drop)) %>% select(!c(drop))
+# get postcode; drop those without postcode match (= non-German territory)
+# in many cases a postcode exists, but not always
+df_google$postcode <- pbsapply(
+  df_google$geometry,
+  function(x, p) {
+    mask <- relate(vect(x), p, "intersects")
+    p$plz[mask][1]
+  },
+  p)
+df_google <- df_google %>% filter(!is.na(postcode))
+
+# import manually checked datasets, drop results which do not make sense
+for (sfx in c("jw", "cmg")) {
+  df_manualcheck <- read_delim(
+    paste0(data, "/external/processed/Google/", x, "_manualcheck_", sfx, ".csv"),
+    delim = ";"
+    )
+  df_google <- merge(
+      df_google, 
+      df_manualcheck %>% select(place_id, drop, drop2), 
+      by = "place_id", all.x = TRUE, all.y = FALSE
+      )
+  df_google <- df_google %>% 
+    filter(is.na(drop) | (drop == 9 & is.na(drop2))) %>% 
+    select(!c(drop, drop2))
+  }
 
 # write cleaned dataset
 saveRDS(df_google, file = paste0(data, "/external/processed/Google/", x, ".rds"))

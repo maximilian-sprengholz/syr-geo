@@ -13,9 +13,9 @@ paths = list(
     wd = "C:Users/claum/Documents/HU Migration und Geschlecht/FoDiRa/ShowingYourReligion/SYR 22 Datensatz + Code/syr-geo",
     data = "C:/Users/claum/Documents/Seafile/FoDiRa-SYR/survey/data"
     ),
-  jmwei = list(
-    wd = "C:/Dokumente/Documents/MZES/Survey/syr-geo",
-    data = "C:/Users/jmwei/Seafile/FoDiRa-SYR/survey/data"
+  juliaweiss = list(
+    wd = "/Users/juliaweiss/syr-geo",
+    data = "/Users/juliaweiss/Seafile/FoDiRa-SYR/survey/data"
     ),
   Lenovo = list(
     wd = "C:/Users/Lenovo/Desktop/Arbeit/Datensatz_SYR/syr-geo",

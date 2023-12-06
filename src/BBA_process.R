@@ -1,3 +1,5 @@
+install.packages("languageserver")
+install.packages("httpgd") 
 #
 # This file merges Destatis data (fetched via API) for selected indicators
 #
@@ -19,18 +21,11 @@ library(readxl)
 # CRAN
 if (!require(pbapply)) install.packages("pbapply")
 library(pbapply)
-
-
-setwd("/Users/juliaweiss/Library/CloudStorage/OneDrive-Charité-UniversitätsmedizinBerlin/Dokumente/MZES/Dokumente/BBA")
-
 if (!require(readxl))install.packages("readxl")
-library(readxl)
-library(magrittr)
-library(dplyr)
-library(readxl)
 
-#Datensatz Juni laden
-df1 <- read_excel("BBA_06_2022.xlsx", sheet=13)
+
+df1 <- read_excel(paste0(data, "/external/raw/BBA/BBA_06_2022.xlsx", sheet = 13)
+head(df)
 
 df1 <- subset(df1, Verwaltungsebene == "3 - Kreis")
 
@@ -39,7 +34,7 @@ df1 <- df1 %>%
 
 
 #Datensatz Dezember laden
-df2 <- read_excel("BBA_12_2022.xlsx", sheet=13)
+df2 <- read_excel(paste0(data, "/external/raw/BBA/BBA_12_2022.xlsx", sheet = 13)
 df2 <- subset(df2, Verwaltungsebene == "3 - Kreis")
 
 df2 <- df2 %>%
@@ -105,13 +100,12 @@ merged_df <- merged_df[, gewuenschte_spalten]
 
 merged_df <- merged_df %>% replace(is.na(.), 0)
 
-library(tidyverse)
 
 
 write_delim(merged_df, "kre.csv", delim = ";")
 
 #Gemeindebene
-df1 <- read_excel("BBA_06_2022.xlsx", sheet=2)
+df1 <- read_excel(paste0(data, "/external/raw/BBA/BBA_06_2022.xlsx", sheet = 2)
 
 
 df1 <- subset(df1, Verwaltungsebene == "4 - Gemeinde")
@@ -155,7 +149,7 @@ colnames(df1)[colnames(df1) == "ags_jun"] <- "ags"
 
 
 #Datensatz Dezember laden
-df2 <- read_excel("BBA_12_2022.xlsx", sheet=2)
+df2 <- read_excel(paste0(data, "/external/raw/BBA/BBA_12_2022.xlsx", sheet = 2)
 
 df2 <- subset(df2, Verwaltungsebene == "4 - Gemeinde")
 
@@ -252,7 +246,7 @@ merged_df2 <- merged_df2 %>% replace(is.na(.), 0)
 
 
 
-df1 <- read_excel("BBA_06_2022.xlsx", sheet=3, skip= 3)
+df1 <- read_excel(paste0(data, "/external/raw/BBA/BBA_06_2022.xlsx", sheet = 3, skip = 3)
 
 
 df1 <- subset(df1, Verwaltungsebene == "4 - Gemeinde")
@@ -272,7 +266,7 @@ new_names <- paste0(current_names)
 colnames(df1) <- new_names
 
 #Datensatz Dezember laden
-df2 <- read_excel("BBA_12_2022.xlsx", sheet=3, skip=3)
+df2 <- read_excel(paste0(data, "/external/raw/BBA/BBA_12_2022.xlsx", sheet=3, skip=3)
 
 df2 <- subset(df2, Verwaltungsebene == "4 - Gemeinde")
 
@@ -352,3 +346,10 @@ spaltennamen
 merged_df4 <- merge(merged_df2, merged_df3, by = "gem_ars")
 
 write_delim(merged_df4, "gem.csv", delim = ";")
+
+#try to solve umlauts problem
+write.table(merged_df4, file = 'gem.csv', sep = ';', row.names = FALSE, col.names = TRUE, quote = FALSE, fileEncoding = 'UTF-8')
+
+write.csv(merged_df4, file = 'gem.csv', row.names = FALSE, fileEncoding = 'UTF-8')
+
+

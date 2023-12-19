@@ -54,55 +54,99 @@ merged_df$kre_ars_ref <- "2022"
 
 colnames(merged_df) <- c("kre_ars", "kre_ars_name", "funkmast_n_x", "glasfaser_km_x", "holzmast_n_x", "hvt_n_x", "kvz_n_x", "leerrohr_km_x", "pop_n_x", "richtfunk_km_x", "ampel_n_x", "strassenlaterne_n_x", "funkmast_n_y", "glasfaser_km_y", "holzmast_n_y", "hvt_n_y", "kvz_n_y", "leerrohr_km_y", "pop_n_y", "richtfunk_km_y", "ampel_n_y", "strassenlaterne_n_y", "kre_ars_ref")
 
-# Ersetze "_x" durch "_jun" und "_y" durch "_dez" in den Spaltennamen
 colnames(merged_df) <- gsub("_x", "_jun", gsub("_y", "_dez", colnames(merged_df)))
 
+prefixes <- c("funkmast_n", "glasfaser_km", "holzmast_n", "hvt_n", "kvz_n",
+              "leerrohr_km", "pop_n", "richtfunk_km", "ampel_n", "strassenlaterne_n")
 
-merged_df$ampel_n_diff <-  merged_df$ampel_n_dez - merged_df$ampel_n_jun 
+jun_columns <- paste0(prefixes, "_jun")
 
-merged_df$funkmast_n_diff <-  merged_df$funkmast_n_dez - merged_df$funkmast_n_jun 
 
-merged_df$glasfaser_km_diff <-  merged_df$glasfaser_km_dez - merged_df$glasfaser_km_jun 
+dez_columns <- paste0(prefixes, "_dez")
 
-merged_df$holzmast_n_diff <-  merged_df$holzmast_n_dez - merged_df$holzmast_n_jun 
 
-merged_df$hvt_n_diff <- merged_df$hvt_n_dez - merged_df$hvt_n_jun 
+diff_columns <- paste0(prefixes, "_diff")
 
-merged_df$kvz_n_diff <-  merged_df$kvz_n_dez - merged_df$kvz_n_jun 
 
-merged_df$leerrohr_km_diff <-  merged_df$leerrohr_km_dez - merged_df$leerrohr_km_jun 
+merged_df[, diff_columns] <- merged_df[, dez_columns] - merged_df[, jun_columns]
 
-merged_df$pop_n_diff <-  merged_df$pop_n_dez - merged_df$pop_n_jun 
-
-merged_df$richtfunk_km_diff <-  merged_df$richtfunk_km_dez - merged_df$richtfunk_km_jun 
-
-merged_df$strassenlaterne_n_diff <-  merged_df$strassenlaterne_n_dez - merged_df$strassenlaterne_n_jun 
-
-spaltennamen <- colnames(merged_df)
-spaltennamen
-
-gewuenschte_spalten <- c(
-  "kre_ars", "kre_ars_name", "kre_ars_ref",
-  "funkmast_n_jun", "funkmast_n_dez", "funkmast_n_diff",
-  "glasfaser_km_jun", "glasfaser_km_dez", "glasfaser_km_diff",
-  "holzmast_n_jun", "holzmast_n_dez", "holzmast_n_diff",
-  "hvt_n_jun", "hvt_n_dez", "hvt_n_diff",
-  "kvz_n_jun", "kvz_n_dez", "kvz_n_diff",
-  "leerrohr_km_jun", "leerrohr_km_dez", "leerrohr_km_diff",
-  "pop_n_jun", "pop_n_dez", "pop_n_diff",
-  "richtfunk_km_jun", "richtfunk_km_dez", "richtfunk_km_diff",
-  "ampel_n_jun", "ampel_n_dez", "ampel_n_diff",
-  "strassenlaterne_n_jun", "strassenlaterne_n_dez", "strassenlaterne_n_diff"
-)
-
-# Anordnen Sie die Spalten entsprechend der gewünschten Reihenfolge
-merged_df <- merged_df[, gewuenschte_spalten]
+merged_df <- merged_df %>%
+  select(
+    kre_ars, kre_ars_name, kre_ars_ref,
+    starts_with("funkmast_n"),
+    starts_with("glasfaser_km"),
+    starts_with("holzmast_n"),
+    starts_with("hvt_n"),
+    starts_with("kvz_n"),
+    starts_with("leerrohr_km"),
+    starts_with("pop_n"),
+    starts_with("richtfunk_km"),
+    starts_with("ampel_n"),
+    starts_with("strassenlaterne_n")
+  )
 
 merged_df <- merged_df %>% replace(is.na(.), 0)
 
+# write
+write_delim(
+  merged_df, 
+  paste0(data, "/external/processed/BBA/kre.csv.csv"), 
+  delim = ";", 
+  na = ""
+  )
 
 
-write_delim(merged_df, "kre.csv", delim = ";")
+### save to variable index
+
+#description infrastructure BBA
+base_names <- c(
+  "Amtlicher Gemeindeschlüssel auf Kreisebene",
+  "Kreisname",
+  "Referenzjahr",
+  "Funkmast (Anzahl)",
+  "Glasfaserleitung (km)",
+  "Holzmast (Anzahl)",
+  "Hauptverteiler (HVt) (Anzahl)",
+  "Kabelverzweiger (KVz)",
+  "Schutz-/Leerrohr (km)",
+  "Point of Presence (PoP) (Anzahl)",
+  "Richtfunkstrecke (km)",
+  "Lichtzeichenanlage (Ampel) (Anzahl)",
+  "Straßenlaterne (Anzahl)"
+)
+
+# Define time periods
+time_periods <- c("Juni", "Dezember", "Differenz Dezember-Juni")
+
+# Create the vector of column names without time periods for specific base names
+descnames <- unlist(lapply(base_names, function(base) {
+  if (base %in% c("Amtlicher Gemeindeschlüssel auf Kreisebene", "Kreisname", "Referenzjahr")) {
+    base
+  } else {
+    lapply(time_periods, function(period) {
+      paste(base, period, sep = " ")
+    })
+  }
+}))
+
+# build data
+varindex <- names(merged_df)
+varindex <- data.frame(varindex)
+varindex$geo <- "kre"
+varindex$year <- 2022
+varindex$month <- "6 und 12"
+varindex$source <- "BBA"
+varindex$source_detail <- "Breitbandatlas der zentralen Informationsstelle des Bundes (ZIS) der 
+                          Bundesnetzagentur"
+
+
+# write
+write_delim(
+  varindex, 
+  paste0(data, "/external/processed/BBA/variable_index.csv"), 
+  delim = ";", 
+  na = ""
+  )
 
 #Gemeindebene
 df1 <- read_excel(paste0(data, "/external/raw/BBA/BBA_06_2022.xlsx", sheet = 2)

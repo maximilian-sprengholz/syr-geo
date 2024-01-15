@@ -24,7 +24,7 @@ columns <- c(
   "variable", "desc", "geo", "year", "month", "source", "source_detail", "xwalk_time_weight", 
   "xwalk_geo_weight"
   )
-for (source in c("Google", "IVW", "BA", "Destatis", "INKAR")) {
+for (source in c("Google", "BBA", "IVW", "BA", "Destatis", "INKAR")) {
   # read
   varindex <- read_delim(
     paste0(data, "/external/processed/", source, "/variable_index.csv"), 
@@ -116,7 +116,7 @@ sapply(
   names(dfs), 
   function(geo) {
     write_delim(
-      dfs[[geo]] %>% select(colnames(.), all_of(varindex$variable)), 
+      dfs[[geo]] %>% select(colnames(.), any_of(varindex$variable)), 
       paste0(data, "/syr_context_", geo, ".csv"), 
       delim = ";"
       )

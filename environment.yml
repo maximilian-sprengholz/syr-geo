@@ -12,6 +12,7 @@ dependencies:
   - r-haven=2.5.0
   - r-jsonlite=1.8.4
   - r-purrr=1.0.1
+  - r-raster=3.6_26
   - r-readr=2.1.4
   - r-readxl=1.4.2
   - r-rvest=1.0.2

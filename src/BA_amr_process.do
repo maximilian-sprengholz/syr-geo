@@ -170,7 +170,7 @@ foreach arslvl in `arslvls' {
     lab var arbeitsstellen "Arbeitsstellen Bestand"
 
     // temporarily save data
-    save "$data/external/temp/ba_amr_kre`arslvl'.dta", replace
+    save "$data/external/temp/BA/ba_amr_kre`arslvl'.dta", replace
 }
 
 //
@@ -180,7 +180,7 @@ foreach arslvl in `arslvls' {
 use `kreise', clear
 levelsof kre_ars, local(arslvls)
 foreach arslvl in `arslvls' {
-    merge 1:1 kre_ars using "$data/external/temp/ba_amr_kre`arslvl'.dta", nogen update replace
+    merge 1:1 kre_ars using "$data/external/temp/BA/ba_amr_kre`arslvl'.dta", nogen update replace
 }
 order _all, alphabetic
 order kre* erwerb* arbeitslose arbeitslose_* arbeitslosenq*

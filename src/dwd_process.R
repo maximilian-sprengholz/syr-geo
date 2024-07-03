@@ -1,7 +1,7 @@
 #
 # This file processes various DWD geo-referenced data:
-# - historical precipitation and temperature
-# - precip/temp at time of interview (Nov/Dec 22)
+# - historical pritation and temperature
+# - pr/temp at time of interview (Nov/Dec 22)
 #
 
 ### config (relative to working dir syr-geo!)
@@ -24,11 +24,7 @@ p_postcode <- p_postcode[c("plz")]
 names(p_postcode) <- c("postcode")
 c_postcode <- centroids(p_postcode, inside = TRUE) # centroids
 
-
-### Monthly values per year: historical_m ##########################################################
-### Daily values survey period: survey_d ###########################################################
-
-### functions
+### functions ######################################################################################
 
 # aggregation function:
 # 1. reads in a raster file
@@ -50,9 +46,11 @@ sragg <- function (file, aggfun, aggby) {
     }
     # aggregate 
     if (is.null(aggby)) {
-      app(r, aggfun[[1]], na.rm = TRUE) # aggregate per cell
+      app(r, aggfun[[1]], na.rm = TRUE) # per cell
+    } else if (length(aggby) == 1) {
+      tapp(r, aggby, aggfun[[1]], na.rm = TRUE) # per cell x time (e.g. month)
     } else {
-      tapp(r, aggby, aggfun[[1]], na.rm = TRUE) # aggregate per cell x time (e.g. month)
+      roll(r, as.numeric(aggby[[2]]), aggfun[[1]], aggby[[1]], na.rm = TRUE) # per cell x moving n time units
     }
   }
 }
@@ -63,10 +61,12 @@ srstack <- function(aggfun, files, aggby) {
   stack <- sapply(files, sragg, aggfun, aggby, simplify = FALSE, USE.NAMES = FALSE)
   # stack in one SpatRaster; assign temporary, consecutively numbered names
   # naming is consistent if aggr. units are unique per output unit (e.g. months in a year;
-  # aggregating over multiple years would have the second january suffixed with _13, and so on)
+  # aggregating over multiple years would have the second january suffixed with 13, and so on)
   # will be overwritten by aggregation function name in srproc
   stack <- rast(stack)
-  if (!is.null(aggby)) names(stack) <- paste0(aggby, "_", 1:length(names(stack)))
+  if (!is.null(aggby)) {
+    names(stack) <- paste(paste0(aggby, collapse = ""), 1:length(names(stack)), sep = "_")
+  }
   return(stack)
 }
 
@@ -83,10 +83,14 @@ srproc <- function(
     path = NULL, # out dir
     stub = NULL # stub prepended to name of variables / output files
     ) {
-  stopifnot(length(df) == 2) # two columns: input unit and corresponding files
-  stopifnot(length(aggby) <= 1) # no or single aggregation function
-  if (length(unique(df[, 1])) > 1) stopifnot(!is.null(path)) # direct returns only for single unit
-  if (length(extract) > 0) stopifnot(!is.null(names(extract))) # only names inputs
+  # two columns: input unit and corresponding files
+  stopifnot(length(df) == 2)
+  # no/single aggregation level; but allow for rolling n parameter
+  if (length(aggby) > 1) stopifnot(length(aggby) == 2 & aggby[[1]] %in% c("around", "from", "to"))
+  # direct returns only for single unit
+  if (length(unique(df[, 1])) > 1) stopifnot(!is.null(path))
+  # only named inputs
+  if (length(extract) > 0) stopifnot(!is.null(names(extract)))
   # log
   log <- data.frame(matrix(ncol = 5, nrow = 0))
   # loop over output units (determines the aggregation level and what is in a single saved file)
@@ -98,11 +102,12 @@ srproc <- function(
     # name stack by aggregation function names
     stack <- sapply(aggfuns, srstack, files = infiles, aggby = aggby)
     for (n in names(stack)) {
-      names(stack[[n]]) <- gsub("^\\D+", paste0(n, "_"), names(stack[[n]]))
+      names(stack[[n]]) <- gsub("^.+_", n, names(stack[[n]]))
       if (!is.null(stub)) names(stack[[n]]) <- paste(stub, names(stack[[n]]), sep = "_")
     }
     stack <- sds(stack)
     # save
+    message("OK")
     if (!is.null(path)) {
       # save for grid
       outfile <- paste0(
@@ -111,7 +116,9 @@ srproc <- function(
       writeCDF(stack, file = outfile, overwrite = TRUE)
       log <- rbind(
         log, 
-        data.frame(unit, outfile, geo = "grid", paste(varnames(stack), sep = ", "), aggby)
+        data.frame(
+          unit, outfile, geo = "grid", paste(varnames(stack), sep = ", "), paste(aggby, collapse = "")
+          )
         )
       # extract and save value for particular geometries as Stata file
       for (geo in names(extract)) {
@@ -120,9 +127,18 @@ srproc <- function(
           ifelse(is.null(stub), paste(unit, geo, sep = "_"), paste(stub, unit, geo, sep = "_")),
           ".dta"
         )
-        values <- extract(stack, project(extract[[geo]], crs(stack)), ID = FALSE, bind = TRUE)
-        sjlabelled::write_stata(as.data.frame(values), outfile, version = 14)
-        log <- rbind(log, data.frame(unit, outfile, geo, paste(varnames(stack), sep = ", "), aggby))
+        values <- as.data.frame(
+          extract(stack, project(extract[[geo]], crs(stack)), ID = FALSE, bind = TRUE)
+        )
+        colnames(values) <- gsub("\\.\\d+", "", colnames(values)) # the geo column is duplicated 
+        values <- values[, !duplicated(colnames(values))]
+        sjlabelled::write_stata(values, outfile, version = 14)
+        log <- rbind(
+          log, 
+          data.frame(
+            unit, outfile, geo, paste(varnames(stack), sep = ", "), paste(aggby, collapse = "")
+          )
+        )
       }
     }
   }
@@ -136,13 +152,13 @@ srproc <- function(
 }
 
 
-### precipitation
+### precipitation ##################################################################################
+
+### historical, monthly
 
 # define output units and corresponding files
 yf <- data.frame(year = 1995:1996)
-yf$input <- paste0(
-  data, "/external/raw/DWD/precip_sum_daily/pr_hyras_1_", yf$year, "_v5-0_de.nc"
-  )
+yf$input <- paste0(data, "/external/raw/DWD/pr_sum_daily/pr_hyras_1_", yf$year, "_v5-0_de.nc")
 # specify aggregation functions
 aggfuns <- list(
   mean = mean,
@@ -157,14 +173,14 @@ log <- srproc(
   yf,
   aggfuns = aggfuns,
   aggby = "month",
-  path = paste0(data, "/external/processed/DWD/precip/historical_monthly"),
-  stub = "precip",
+  path = paste0(data, "/external/processed/DWD/pr/historical"),
+  stub = "pr_hist",
   extract = list(postcode = c_postcode)
   )
 # write out cleaned log with added info
 colnames(log) <- c("fileref", colnames(log)[2:length(colnames(log))])
 log <- data.frame(
-  indicator = "precip",
+  indicator = "pr",
   scope = "historical",
   fileby = "year",
   log)
@@ -177,7 +193,103 @@ write.table(
   )
 
 
-### temperature: first aggregate to daily values
+### presurvey, 14 days (including) survey day
+
+# define output units and corresponding files
+yf <- data.frame(year = 2022)
+yf$input <- paste0(data, "/external/raw/DWD/pr_sum_daily/pr_hyras_1_", yf$year, "_v5-0_de.nc")
+# specify aggregation functions
+aggfuns <- list(
+  mean = mean,
+  min = min,
+  max = max,
+  d_low = function(x, na.rm) { sum(x < 0.1, na.rm = na.rm) }, # no rain,
+  d_high1 = function(x, na.rm) { sum(x >= 50, na.rm = na.rm) }, # DWD Ergbiebiger Dauerregen
+  d_high2 = function(x, na.rm) { sum(x > 80, na.rm = na.rm) } # DWD extrem ergbiebiger Dauerregen
+)
+# call processing function
+log <- srproc(
+  yf,
+  aggfuns = aggfuns,
+  aggby = c("to", 14),
+  path = paste0(data, "/external/processed/DWD/pr/presurvey"),
+  stub = "pr_presurvey",
+  extract = list(postcode = c_postcode)
+  )
+# write out cleaned log with added info
+colnames(log) <- c("fileref", colnames(log)[2:length(colnames(log))])
+log <- data.frame(
+  indicator = "pr",
+  scope = "presurvey",
+  fileby = "",
+  log)
+log$file <- gsub(data, "", log$file)
+write.table(
+  log,
+  file = paste0(data, "/external/processed/DWD/log.csv"),
+  sep = ";", 
+  row.names = FALSE,
+  col.names = FALSE,
+  append = TRUE
+  )
+
+
+### survey time (5 minute intervals -> no aggregation)
+
+# define output units and corresponding files
+yf <- data.frame(day = 1:365)
+yf$input <- data.frame(input = list.files(paste0(data, "/external/raw/DWD/pr_sum_5min/2022")))
+
+# manually extract values and save to Stata
+log <- sapply(
+  yf$input,
+  function(r, extract) {
+    for (geo in names(extract)) {
+      outfile <- paste0(
+        path, "/", 
+        ifelse(is.null(stub), paste(unit, geo, sep = "_"), paste(stub, unit, geo, sep = "_")),
+        ".dta"
+      )
+      values <- as.data.frame(
+        extract(stack, project(extract[[geo]], crs(stack)), ID = FALSE, bind = TRUE)
+      )
+      colnames(values) <- gsub("\\.\\d+", "", colnames(values)) # the geo column is duplicated 
+      values <- values[, !duplicated(colnames(values))]
+      sjlabelled::write_stata(values, outfile, version = 14)
+      log <- rbind(
+        log, 
+        data.frame(
+          unit, outfile, geo, paste(varnames(stack), sep = ", "), paste(aggby, collapse = "")
+        )
+      )
+    }
+  },
+  extract = list(postcode = c_postcode)
+
+
+
+
+# write out cleaned log with added info
+colnames(log) <- c("fileref", colnames(log)[2:length(colnames(log))])
+log <- data.frame(
+  indicator = "pr",
+  scope = "presurvey",
+  fileby = "",
+  log)
+log$file <- gsub(data, "", log$file)
+write.table(
+  log,
+  file = paste0(data, "/external/processed/DWD/log.csv"),
+  sep = ";", 
+  row.names = FALSE,
+  col.names = FALSE,
+  append = TRUE
+  )
+
+
+### temperature ####################################################################################
+
+### first aggregate to daily values
 
 # define output units and corresponding files
 yf <- data.frame(input = list.files(paste0(data, "/external/raw/DWD/temp_mean_hourly")))
@@ -227,26 +339,13 @@ log <- srproc(
   yf,
   aggfuns = aggfuns,
   aggby = "month",
-  path = paste0(data, "/external/processed/DWD/temp/historical_monthly"),
+  path = paste0(data, "/external/processed/DWD/temp/historical"),
   stub = "temp"
   )
 
 
 
-
-### Values at survey time ##########################################################
-# processing function: rolling mean
-daily <- function(
-      df, # dataframe of units to input by (e.g. years) and corresponding files
-      path, # out dir
-      stub, # stub prepended to name
-      funs = c("mean", "min", "max"), # vector of function names (strings) to be estimated from data
-      agg = "month",
-      extract = list() # named list of point spatVectors for which to extract values (e.g. postcode centroids)
-    ) {
-  }
-
-### testing area
+### testing area ###################################################################################
 
 r1 <- rast(yf[1,2])
 names(r1) <- rep(paste0("testnames1_", 1:31), 12)[1:365]
@@ -258,4 +357,7 @@ t <- rast(t)
 names(t) <- paste0("lol_", 1:length(names(t)))
 tt <- as.data.frame(extract(t, project(c_postcode, crs(t)), ID = FALSE, bind = TRUE))
 
-
+t <- rast(paste0(data, "/external/processed/DWD/pr/historical_monthly/pr_1995_grid.nc"))
+tt <- extract(t, project(c_postcode, crs(t)), ID = FALSE, bind = TRUE)
+tt <- as.data.frame(tt, check.names = FALSE)
+colnames(tt)

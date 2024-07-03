@@ -27,14 +27,14 @@ files <- files[grep("pr_hyras_1_(199[5-9]|200[0-9]|201[0-9]|2020|2021|2022)_v5-0
 for (f in files) {
   download.file(
     paste0(url, f), 
-    paste0(data, "/external/raw/DWD/precip_sum_daily/", f)
+    paste0(data, "/external/raw/DWD/pr_sum_daily/", f)
   )
 }
 
 ### 5min (just a single file for 2022)
 # download
 f <- "YW2017.002_2022_netcdf.tar.gz"
-outfile <- paste0(data, "/external/raw/DWD/precip_sum_5min/", f)
+outfile <- paste0(data, "/external/raw/DWD/pr_sum_5min/", f)
 download.file(
   paste0(
     "https://opendata.dwd.de/climate_environment/CDC/grids_germany/5_minutes/radolan/reproc/2017_002/netCDF/2022/",
@@ -43,9 +43,17 @@ download.file(
   outfile
 )
 # extract and delete archive
-untar(outfile, exdir = paste0(data, "/external/raw/DWD/precip_sum_5min/"))
+untar(outfile, exdir = paste0(data, "/external/raw/DWD/pr_sum_5min/"))
 file.remove(outfile)
-
+# dissolve month structure so that everything is in a single folder
+outdir <- paste0(data, "/external/raw/DWD/pr_sum_5min/2022/")
+for (m in c(paste0(0, 1:9), 10:12)) {
+  indir <- paste0(outdir, "/", m)
+  files <- list.files(path = indir)
+  for (f in files) {
+    file.rename(from = paste0(indir, "/", f), to = paste0(outdir, "/", f))
+  }
+}
 
 ### temperature ####################################################################################
 

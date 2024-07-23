@@ -7,23 +7,40 @@
 
 ### config (relative to working dir syr-geo!)
 rm(list = ls())
-source("src/_config.R")
+# get user = username on machine
+user = Sys.info()[7]
+
+# paths
+paths = list(
+  max = list(
+    wd = "C:/Users/max/Seafile/syr-geo",
+    data = "C:/Users/max/Seafile/FoDiRa-SYR/survey/data"
+  )
+)
+for (key in names(paths[[user]])) {
+  do.call("<-", list(key, unlist(paths[[user]][key])))
+}
 
 ### packages
-
-# conda managed
+if (!require(tidyverse)) install.packages("tidyverse")
 library(tibble)
 library(dplyr)
 library(tidyr)
+if (!require(sjlabelled)) install.packages("sjlabelled")
 library(sjlabelled)
-#library(lubridate)
+if (!require(lubridate)) install.packages("lubridate")
+library(lubridate)
+if (!require(zoo)) install.packages("zoo")
 library(zoo)
+if (!require(sf)) install.packages("sf")
 library(sf)
+if (!require(terra)) install.packages("terra")
 library(terra)
-terra::gdalCache(8000) # 12 GB per chunk
+terra::gdalCache(8000) # 8 GB per chunk
+terraOptions(todisk = TRUE)
+terraOptions(steps = 6)
+if (!require(ncdf4)) install.packages("ncdf4")
 library(ncdf4) # necessary for writing .nc
-
-# CRAN only
 if (!require(pbapply)) install.packages("pbapply")
 library(pbapply)
 if (!require(exactextractr)) install.packages("exactextractr")
@@ -623,129 +640,3 @@ writelog(
   gsubfilepath = data,
   append = TRUE
 )
-
-### testing area ###################################################################################
-
-crs <- "PROJCS[\"Radolan projection\",
-    GEOGCS[\"Radolan Coordinate System\",
-        DATUM[\"Radolan Kugel\",
-            SPHEROID[\"Erdkugel\",6370040.0,0.0,
-            LENGTHUNIT[\"metre\",1]]],
-        PRIMEM[\"Greenwich\",0,
-            ANGLEUNIT[\"Degree\",0.017453292519943295]]],
-    CONVERSION[\"North_Pole_Stereographic\",
-        METHOD[\"Polar Stereographic (variant A)\",
-            ID[\"EPSG\",9810]],
-        PARAMETER[\"Latitude of natural origin\",90,
-            ANGLEUNIT[\"Degree\",0.017453292519943295],
-            ID[\"EPSG\",8801]],
-        PARAMETER[\"Longitude of natural origin\",10,
-            ANGLEUNIT[\"Degree\",0.017453292519943295],
-            ID[\"EPSG\",8802]],
-        PARAMETER[\"Scale factor at natural origin\",1,
-            SCALEUNIT[\"unity\",0.9330127019],
-            ID[\"EPSG\",8805]],
-        PARAMETER[\"False easting\",0,
-            LENGTHUNIT[\"metre\",1],
-            ID[\"EPSG\",8806]],
-        PARAMETER[\"False northing\",0,
-            LENGTHUNIT[\"metre\",1],
-            ID[\"EPSG\",8807]]],
-        PARAMETER[\"Latitude of standard parallel\",60,
-            ANGLEUNIT[\"Degree\",0.017453292519943295],
-            ID[\"EPSG\",8832]],
-    CS[Cartesian,2],
-        AXIS[\"(E)\",south,
-            ANGLEUNIT[\"degree\",0.017453292519943295],
-            ORDER[1],
-            LENGTHUNIT[\"metre\",1]],
-        AXIS[\"(N)\",south,
-            MERIDIAN[180,
-                ANGLEUNIT[\"degree\",0.017453292519943295]],
-            ORDER[2],
-            LENGTHUNIT[\"metre\",1]],
-    UNIT[\"metre\",1,
-        AUTHORITY[\"EPSG\",\"9001\"]]
-    ]"
-
-crs2 <- "PROJCS[\"North_Pole_Stereographic\",
-       GEOGCS[\"WGS 84\",
-              DATUM[\"WGS_1984\",
-                    SPHEROID[\"WGS 84\",6378137,298.257223563,
-                             AUTHORITY[\"EPSG\",\"7030\"]],
-                    AUTHORITY[\"EPSG\",\"6326\"]],
-              PRIMEM[\"Greenwich\",0],
-              UNIT[\"Degree\",0.0174532925199433]],
-       PROJECTION[\"Polar_Stereographic\"],
-       PARAMETER[\"latitude_of_origin\",90],
-       PARAMETER[\"central_meridian\",0],
-       PARAMETER[\"scale_factor\",1],
-       PARAMETER[\"false_easting\",0],
-       PARAMETER[\"false_northing\",0],
-       UNIT[\"metre\",1,
-            AUTHORITY[\"EPSG\",\"9001\"]],
-       AUTHORITY[\"ESRI\",\"102018\"]]
-       "
-
-w <- vect(paste0(data, "/external/raw/DWD/NUTS_RG_20M_2021_3035/NUTS_RG_20M_2021_3035.shp"))
-t <- rast(paste0(data, "/external/raw/DWD/pr_sum_5min/2022/YW_2017.002_20221201.nc"), drivers="NETCDF")
-t <- t[[1]]
-crs(t) <- crs
-t <- terra::project(t, crs(w))
-r <- rast(paste0(data, "/external/raw/DWD/pr_sum_daily/pr_hyras_1_1995_v5-0_de.nc"))
-r <- r[[1]]
-
-plot(is.na(t), alpha = 1, col = c("#ffffff", "#000000"), legend = FALSE, axes = FALSE, ext = ext(t) * 0.95)
-plot(is.na(project(r, crs(w))), alpha = 0.5, add = TRUE, legend = FALSE)
-plot(w, add = T)
-title("Radolan 5min rain data coverage", line = 2.5)
-
-
-t <- c(rast(yf[1,2]), rast(yf[2,2]), rast(yf[3,2]))
-terra::writeRaster(t, file = "/home/max/Seafile/FoDiRa-SYR/survey/data/external/processed/DWD/temp/test.asc", overwrite = TRUE)
-
-
-t <- rast(yf[1,2])
-period <- c("2022-10-28", "2022-12-09", "forcedate")
-t <- t[[as.Date(time(t)) >= period[[1]] & as.Date(time(t)) <= period[[2]]]]
-
-# time comp extract terra vs. exactextractr
-t <- rast(yf[1,2])
-crs(t) <- crs
-sf <- sf::st_as_sf(project(p_postcode, crs(t)))
-df <- data.frame(postcode = sf[[1]])
-tic()
-e <- exactextractr::exact_extract(
-  t,
-  sf,
-  fun = "mean",
-  force_df = TRUE,
-  progress = TRUE,
-  append_cols = TRUE,
-  stack_apply = TRUE
-  )
-sum(!is.na(e))
-toc()
-
-r <- rast(yf[1,2])
-time(r) <- seq(
-  from = as.POSIXlt(time(r)[1], tz = "CET"),
-  to = as.POSIXlt(time(r)[length(time(r))] + 1, tz = "CET"),
-  by = "hour"
-)[1:length(time(r))]
-time <- time(r)
-period <- list(start = as.POSIXlt("2022-10-28", tz = "CET"), end = as.POSIXlt("2022-12-09", tz = "CET"))
-time <- as.POSIXlt(time, tz = attr(period$start, "tzone"))
-r <- r[[time >= period$start & time <= period$end]]
-time(r)
-
-
-t <- as.POSIXlt("2022-10-28")
-t["years"]
-
-for (i in 10:30) {
-  r <- rast(paste0("C:/Users/max/Seafile/FoDiRa-SYR/survey/data/external/raw/DWD/pr_sum_5min/2022/YW_2017.002_202211", i, ".nc"))
-  print(max(values(r), na.rm = TRUE))
-}
-
-r <- rast(paste0("C:/Users/max/Seafile/FoDiRa-SYR/survey/data/external/raw/DWD/YW_2017.002_20220101_0000.asc"))

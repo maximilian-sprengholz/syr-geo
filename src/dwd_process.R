@@ -341,8 +341,8 @@ aggfuns <- list(
   min = min,
   max = max,
   d_low = function(x, na.rm = FALSE) { sum(x < 0.1, na.rm = na.rm) }, # no rain,
-  d_high1 = function(x, na.rm = FALSE) { sum(x >= 50, na.rm = na.rm) }, # DWD Ergiebiger Dauerregen
-  d_high2 = function(x, na.rm = FALSE) { sum(x > 80, na.rm = na.rm) } # DWD extrem ergiebiger Dauerregen
+  d_high1 = function(x, na.rm = FALSE) { sum(x >= 30, na.rm = na.rm) }, # DWD Dauerregen
+  d_high2 = function(x, na.rm = FALSE) { sum(x >= 50, na.rm = na.rm) } # DWD Ergiebiger Dauerregen
 )
 # call processing function
 log <- srproc(
@@ -376,8 +376,8 @@ aggfuns <- list(
   min = min,
   max = max,
   d_low = function(x, na.rm = FALSE) { sum(x < 0.1, na.rm = na.rm) }, # no rain,
-  d_high1 = function(x, na.rm = FALSE) { sum(x >= 50, na.rm = na.rm) }, # DWD Ergiebiger Dauerregen
-  d_high2 = function(x, na.rm = FALSE) { sum(x > 80, na.rm = na.rm) } # DWD extrem ergiebiger Dauerregen
+  d_high1 = function(x, na.rm = FALSE) { sum(x >= 30, na.rm = na.rm) }, # DWD Dauerregen
+  d_high2 = function(x, na.rm = FALSE) { sum(x >= 50, na.rm = na.rm) } # DWD Ergiebiger Dauerregen
 )
 # call processing function
 log <- srproc(

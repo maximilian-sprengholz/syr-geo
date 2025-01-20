@@ -668,25 +668,6 @@ crs <- "PROJCS[\"Radolan projection\",
         AUTHORITY[\"EPSG\",\"9001\"]]
     ]"
 
-crs2 <- "PROJCS[\"North_Pole_Stereographic\",
-       GEOGCS[\"WGS 84\",
-              DATUM[\"WGS_1984\",
-                    SPHEROID[\"WGS 84\",6378137,298.257223563,
-                             AUTHORITY[\"EPSG\",\"7030\"]],
-                    AUTHORITY[\"EPSG\",\"6326\"]],
-              PRIMEM[\"Greenwich\",0],
-              UNIT[\"Degree\",0.0174532925199433]],
-       PROJECTION[\"Polar_Stereographic\"],
-       PARAMETER[\"latitude_of_origin\",90],
-       PARAMETER[\"central_meridian\",0],
-       PARAMETER[\"scale_factor\",1],
-       PARAMETER[\"false_easting\",0],
-       PARAMETER[\"false_northing\",0],
-       UNIT[\"metre\",1,
-            AUTHORITY[\"EPSG\",\"9001\"]],
-       AUTHORITY[\"ESRI\",\"102018\"]]
-       "
-
 w <- vect(paste0(data, "/external/raw/DWD/NUTS_RG_20M_2021_3035/NUTS_RG_20M_2021_3035.shp"))
 t <- rast(paste0(data, "/external/raw/DWD/pr_sum_5min/2022/YW_2017.002_20221201.nc"), drivers="NETCDF")
 t <- t[[1]]
@@ -695,10 +676,12 @@ t <- terra::project(t, crs(w))
 r <- rast(paste0(data, "/external/raw/DWD/pr_sum_daily/pr_hyras_1_1995_v5-0_de.nc"))
 r <- r[[1]]
 
+jpeg(file = paste0(wd, "/docs/radolan_pr_coverage.jpg"), width = 800, height = 1000)
 plot(is.na(t), alpha = 1, col = c("#ffffff", "#000000"), legend = FALSE, axes = FALSE, ext = ext(t) * 0.95)
 plot(is.na(project(r, crs(w))), alpha = 0.5, add = TRUE, legend = FALSE)
 plot(w, add = T)
 title("Radolan 5min rain data coverage", line = 2.5)
+dev.off()
 
 
 t <- c(rast(yf[1,2]), rast(yf[2,2]), rast(yf[3,2]))

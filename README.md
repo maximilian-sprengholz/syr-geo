@@ -15,7 +15,7 @@ This repository fetches and processes geographical context data which supplement
 ```
 
 ## Notes
-- The following data sources are used:
+- We use the following data sources:
   - Bundesagentur für Arbeit
   - Breitbandatlas
   - Destatis
@@ -27,6 +27,7 @@ This repository fetches and processes geographical context data which supplement
 - Whenever data is not fetched in the code, the data was available to us locally, but is not shared in this repo. Fetching via API (Destatis and Google) requires API keys.
 - We harmonize external data geographies over time using crosswalks (e.g., due to reform of administrative units such as municipalities).
 - All processed data is merged via `src/merge`, where input geographies from externmal sources are translated to the output geographies from the survey (postcode, individual self-reported residential area) also via crosswalks.
+- Shout-out to the authors of these great packages: [`ags`](https://github.com/sumtxt/ags), [`bonn`](https://github.com/sumtxt/bonn), [`dotenv`](https://github.com/gaborcsardi/dotenv), [`exactextractr`](https://github.com/isciences/exactextractr), [`googleway`](https://github.com/SymbolixAU/googleway), [`httr`](https://github.com/r-lib/httr2), [`jsonlite`](https://github.com/jeroen/jsonlite), [`lwgeom`](https://github.com/r-spatial/lwgeom), [`ncdf4`](https://cran.r-project.org/web/packages/ncdf4/index.html), [`pbapply`](https://github.com/psolymos/pbapply), [`restatis`](https://github.com/CorrelAid/restatis), [`sf`](https://github.com/r-spatial/sf), [`terra`](https://github.com/rspatial/terra), [`tidyterra`](https://github.com/dieghernan/tidyterra), [`tidyverse`](https://github.com/tidyverse)
 
 ## License
 

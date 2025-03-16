@@ -1,6 +1,6 @@
 # SYR Survey Geographical Context Data
 
-This repository fetches and processes geographical context data which supplement the self-conducted SYR online survey in the research project [Seeing Your Religion](https://www.dezim-institut.de/en/dezim-research-community/research-alliance-on-discrimination-and-racism/fodira-projekt-seeing-your-religion/).
+This repository fetches and processes geographical context data which supplement the self-conducted SYR online survey in the research project [Seeing Your Religion — Regional Variation of Anti-Muslim Discrimination and Racism on the German Labor Market](https://www.dezim-institut.de/en/dezim-research-community/research-alliance-on-discrimination-and-racism/fodira-projekt-seeing-your-religion/).
 
 ## Project organization
 

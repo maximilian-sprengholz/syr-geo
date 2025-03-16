@@ -490,6 +490,8 @@ aggfuns <- list(
   min = min,
   max = max
 )
+# create temp dir
+dir.create(file.path(data, "external/temp", "DWD", "temp"), recursive = TRUE, showWarnings = FALSE)
 # call processing function
 log <- srproc(
   yf,
@@ -623,3 +625,6 @@ writelog(
   gsubfilepath = data,
   append = TRUE
 )
+# clean up temp files
+# create temp dir
+unlink(file.path(data, "external/temp", "DWD"), recursive = TRUE)

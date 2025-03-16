@@ -1,6 +1,8 @@
 // config
 clear
 run "src/_config.do"
+cap mkdir "$data/external/temp/BA"
+cap mkdir "$data/external/temp/BA/temp"
 
 
 //
@@ -236,3 +238,7 @@ else {
     use `kreise', clear
 }
 export delimited using `file', delimiter(";") replace quote
+
+// clean temp data
+if ("`c(os)'" == "Windows") shell rmdir "$data/external/temp/BA" /s /q
+	else shell rm -r "$data/external/temp/BA"
